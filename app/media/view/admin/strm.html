@@ -46,6 +46,7 @@
       <div class="flex items-center gap-3">
         <button id="btnGen" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 transition">开始生成</button>
         <button id="btnHealth" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">测试播放接口</button>
+        <button id="btnListLogs" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">查看日志列表</button>
         <span id="status" class="text-sm text-gray-300"></span>
       </div>
 
@@ -129,6 +130,26 @@ document.getElementById('btnHealth').addEventListener('click', async ()=>{
   appendLog('测试：/media/strm/play (Range) ...');
   const res = await fetch('/media/strm/play?path=/__not_exist__', {headers:{'Range':'bytes=0-1'}});
   appendLog('返回HTTP: '+res.status+' (预期 403/404 都正常)');
+});
+
+
+document.getElementById('btnListLogs').addEventListener('click', async ()=>{
+  appendLog('拉取日志列表...');
+  try{
+    const res = await fetch('/media/admin/strmLogs');
+    const r = await res.json();
+    if(r.code!==200){
+      appendLog('ERROR: '+(r.message||'unknown'));
+      return;
+    }
+    appendLog('最近日志(最多50):');
+    (r.data||[]).forEach(it=>{
+      appendLog('- '+it.mtime+'  '+it.file+'  '+it.size+' bytes');
+      appendLog('  '+location.origin+'/media/admin/strmLog?file='+encodeURIComponent(it.file));
+    });
+  }catch(e){
+    appendLog('EXCEPTION: '+e);
+  }
 });
 </script>
 
