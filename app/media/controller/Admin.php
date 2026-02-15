@@ -1281,21 +1281,26 @@ class Admin extends BaseController
         $defaultSrc = '/opt/embycontroller/test-media';
         $defaultOut = '/opt/embycontroller/strm-out';
         $defaultExts = 'mkv,mp4,avi,mov,m4v';
+        $defaultBaseUrl = ''; // empty => auto
+
 
         try {
             $cfg = new SysConfigModel();
             $srcRow = $cfg->where('appName','strm')->where('key','src_dir')->find();
             $outRow = $cfg->where('appName','strm')->where('key','out_dir')->find();
             $extRow = $cfg->where('appName','strm')->where('key','exts')->find();
+            $baseRow = $cfg->where('appName','strm')->where('key','base_url')->find();
             if ($srcRow && $srcRow['value']) $defaultSrc = $srcRow['value'];
             if ($outRow && $outRow['value']) $defaultOut = $outRow['value'];
             if ($extRow && $extRow['value']) $defaultExts = $extRow['value'];
+            if ($baseRow && $baseRow['value']) $defaultBaseUrl = $baseRow['value'];
         } catch (\Throwable $e) {
         }
 
         View::assign('defaultSrc', $defaultSrc);
         View::assign('defaultOut', $defaultOut);
         View::assign('defaultExts', $defaultExts);
+        View::assign('defaultBaseUrl', $defaultBaseUrl);
         return view();
     }
 
@@ -1313,6 +1318,7 @@ class Admin extends BaseController
 
         $srcDir = trim((string)($payload['srcDir'] ?? ''));
         $outDir = trim((string)($payload['outDir'] ?? ''));
+        $baseUrl = trim((string)($payload['baseUrl'] ?? ''));
         $exts = trim((string)($payload['exts'] ?? ''));
         $overwrite = (bool)($payload['overwrite'] ?? false);
         $saveCfg = (bool)($payload['saveCfg'] ?? true);
@@ -1341,7 +1347,7 @@ class Admin extends BaseController
         $countSkip = 0;
 
         // determine base url from current request
-        $base = rtrim(Request::domain(), '/');
+        $base = $baseUrl !== '' ? rtrim($baseUrl, '/') : rtrim(Request::domain(), '/');
         $playPrefix = $base . '/media/strm/play?path=';
 
         $srcRootReal = realpath($srcDir);
@@ -1395,6 +1401,7 @@ class Admin extends BaseController
                 $upsert('src_dir', $srcDir);
                 $upsert('out_dir', $outDir);
                 $upsert('exts', $exts);
+                $upsert('base_url', $baseUrl);
                 // allowed roots (newline list)
                 $upsert('allowed_roots', $srcDir . "\n");
             } catch (\Throwable $e) {

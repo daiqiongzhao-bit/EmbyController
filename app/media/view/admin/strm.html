@@ -20,6 +20,13 @@
         <p class="text-xs text-gray-400 mt-1">Emby 媒体库建议直接指向这个目录。</p>
       </div>
 
+
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">播放基地址（可留空：自动用当前访问域名）</label>
+        <input id="baseUrl" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="http://8.134.99.102:8018" value="{$defaultBaseUrl|default=''}" />
+        <p class="text-xs text-gray-400 mt-1">写入 .strm 的链接前缀，适配不同用户的域名/反代地址。</p>
+      </div>
+
       <div>
         <label class="block text-sm text-gray-300 mb-1">后缀（逗号分隔）</label>
         <input id="exts" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="mkv,mp4,avi" value="{$defaultExts|default='mkv,mp4,avi,mov,m4v'}" />
@@ -78,6 +85,7 @@ async function postJson(url, data){
 document.getElementById('btnGen').addEventListener('click', async ()=>{
   const srcDir=document.getElementById('srcDir').value.trim();
   const outDir=document.getElementById('outDir').value.trim();
+  const baseUrl=document.getElementById('baseUrl').value.trim();
   const exts=document.getElementById('exts').value.trim();
   const overwrite=document.getElementById('overwrite').checked;
   const saveCfg=document.getElementById('saveCfg').checked;
@@ -85,7 +93,7 @@ document.getElementById('btnGen').addEventListener('click', async ()=>{
   document.getElementById('log').textContent='';
   appendLog('开始生成...');
   try{
-    const r = await postJson('/media/admin/strmGenerate', {srcDir,outDir,exts,overwrite,saveCfg});
+    const r = await postJson('/media/admin/strmGenerate', {srcDir,outDir,baseUrl,exts,overwrite,saveCfg});
     if(r.code!==200){
       document.getElementById('status').textContent='失败';
       appendLog('ERROR: '+(r.message||'unknown'));
