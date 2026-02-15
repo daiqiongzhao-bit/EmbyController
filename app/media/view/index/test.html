@@ -1,5 +1,4 @@
 {__NOLAYOUT__}
-
 <!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -17,42 +16,34 @@
             backdrop-filter: blur(8px);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
-
         .glass-effect {
             background: rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(8px);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
-
         body {
             background-color: rgb(3, 3, 3);
             color: rgb(250, 250, 250);
         }
-
         .mobile-menu {
             display: none;
         }
         .mobile-menu.active {
             display: block;
         }
-
         .relative:hover .zoom-img {
             transform: scale(1.1);
         }
-
         .zoom-img {
             transition: transform 0.3s ease;
         }
-
         .hide-scrollbar::-webkit-scrollbar {
             display: none;
         }
-
         .hide-scrollbar {
             -ms-overflow-style: none;  /* Internet Explorer 10+ */
             scrollbar-width: none;  /* Firefox */
         }
-
         .changelog-dialog {
             display: none;
             position: fixed;
@@ -61,13 +52,11 @@
             z-index: 100;
             backdrop-filter: blur(4px);
         }
-
         .changelog-dialog.active {
             display: flex;
             align-items: center;
             justify-content: center;
         }
-
         .changelog-content {
             background: rgb(3, 3, 3);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -78,7 +67,6 @@
             max-height: 90vh;
             overflow-y: auto;
         }
-
         .version-tag {
             display: inline-block;
             padding: 0.2em 0.4em;
@@ -97,31 +85,14 @@
     <nav class="fixed top-0 z-50 w-full px-4 md:px-6 py-4">
         <div class="glass-effect rounded-full mx-auto max-w-7xl px-4 md:px-6 py-3 flex items-center justify-between">
             <a href="/media" class="text-xl md:text-2xl font-bold">影视管理站-算艺轩</a>
-
             <!-- 移动端菜单按钮 -->
             <button id="menuButton" class="md:hidden p-2 glass-effect rounded-full">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
                 </svg>
             </button>
-
             <!-- 桌面端导航 -->
             <div id="menu" class="hidden md:flex items-center space-x-8">
-
-                <a href="https://github.com/RandallAnjie/EmbyController" target="_blank" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    <span>GitHub</span>
-                </a>
-
-                <a href="https://t.me/randall_home" target="_blank" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    <span>Telegram群组</span>
-                </a>
-
                 <button id="desktopChangelogButton" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -142,7 +113,6 @@
                     </svg>
                     <span>登录</span>
                 </a>
-
                 <a href="/media/user/register" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -156,53 +126,33 @@
                 <!--                    </svg>-->
                 <!--                    <span>电影</span>-->
                 <!--                </a>-->
-
                 <!--                <a href="/tv" class="flex items-center space-x-2 hover:text-white/80 transition-colors">-->
                 <!--                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">-->
                 <!--                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />-->
                 <!--                    </svg>-->
                 <!--                    <span>电视剧</span>-->
                 <!--                </a>-->
-
                 <!--                <a href="/music" class="flex items-center space-x-2 hover:text-white/80 transition-colors">-->
                 <!--                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">-->
                 <!--                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />-->
                 <!--                    </svg>-->
                 <!--                    <span>音乐</span>-->
                 <!--                </a>-->
-
                 <!--                <button class="glass-effect p-2 rounded-full hover:bg-white/20 transition-colors">-->
                 <!--                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">-->
                 <!--                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />-->
                 <!--                    </svg>-->
                 <!--                </button>-->
             </div>
-
             <!-- 移动端导航菜单 -->
             <div id="mobileMenu" class="mobile-menu absolute top-full left-0 right-0 mt-2 p-4 md:hidden">
                 <div class="glass-effect-mobile rounded-lg p-4 flex flex-col space-y-4">
-
-                    <a href="https://github.com/RandallAnjie/EmbyController" target="_blank" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                        </svg>
-                        <span>GitHub</span>
-                    </a>
-
-                    <a href="https://t.me/randall_home" target="_blank" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                        <span>Telegram群组</span>
-                    </a>
-
                     <button id="mobileChangelogButton" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                         <span>站点日志</span>
                     </button>
-
                     {if isset(session('r_user')->id)}
                     <a href="/media/user/index" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -224,33 +174,28 @@
                         <span>注册</span>
                     </a>
                     {/if}
-
                     <!--                    <a href="/movies" class="flex items-center space-x-2 hover:text-white/80 transition-colors">-->
                     <!--                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">-->
                     <!--                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h18M3 16h18" />-->
                     <!--                        </svg>-->
                     <!--                        <span>电影</span>-->
                     <!--                    </a>-->
-
                     <!--                    <a href="/tv" class="flex items-center space-x-2 hover:text-white/80 transition-colors">-->
                     <!--                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">-->
                     <!--                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />-->
                     <!--                        </svg>-->
                     <!--                        <span>电视剧</span>-->
                     <!--                    </a>-->
-
                     <!--                    <a href="/music" class="flex items-center space-x-2 hover:text-white/80 transition-colors">-->
                     <!--                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">-->
                     <!--                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />-->
                     <!--                        </svg>-->
                     <!--                        <span>音乐</span>-->
                     <!--                    </a>-->
-
                 </div>
             </div>
         </div>
     </nav>
-
     <!-- 主要内容区域 -->
     <main class="pt-24">
         <!-- Hero区域 -->
@@ -264,7 +209,6 @@
                     专业的影视管理平台
                 </h1>
             </div>
-
             <!-- 背景图片和渐变 -->
             <div class="absolute inset-0">
                 <img
@@ -274,12 +218,10 @@
                 />
                 <div class="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-transparent"></div>
             </div>
-
             <!-- 主要内容区域 -->
             <div class="relative h-full flex items-center px-4 md:px-6">
                 <div class="max-w-2xl mx-auto md:ml-40 lg:ml-64 animate-fade-in mt-64">
                     <p class="text-base md:text-lg text-white/80 mb-8">
-                        
                     </p>
                     {if isset(session('r_user')->id)}
                     <button class="glass-effect w-full md:w-auto px-6 md:px-8 py-3 md:py-4 rounded-full flex items-center justify-center space-x-2 hover:bg-white/20 transition-all duration-300" onclick="window.location.href='/media/user/index'">
@@ -301,7 +243,6 @@
                 </div>
             </div>
         </div>
-
         <!-- 统计数据区域 -->
         <section class="max-w-7xl mx-auto px-4 py-12">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -316,7 +257,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="p-6 glass-effect rounded-lg">
                     <div class="flex items-center space-x-4">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -330,19 +270,16 @@
                 </div>
             </div>
         </section>
-
         <!-- 最新内容区域 -->
         <section class="max-w-7xl mx-auto px-4 py-12">
             <h2 class="text-xl md:text-2xl font-semibold mb-4 md:mb-6">最新更新</h2>
             <div id="latest-update-loading" class="loading inset-0 bg-black/50 flex items-center justify-center w-full z-50" style="height: 332px"><svg t="1732080319120" class="animate-spin h-10 w-10 text-white" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="1461" width="64" height="64"><path d="M512 107.52c-223.37536 0-404.48 181.08416-404.48 404.48s181.10464 404.48 404.48 404.48 404.48-181.08416 404.48-404.48-181.10464-404.48-404.48-404.48z m-222.43328 501.1456a97.60768 97.60768 0 1 1 0.83968-195.19488 97.60768 97.60768 0 0 1-0.83968 195.19488z m221.10208 222.9248a97.54624 97.54624 0 0 1-97.15712-97.95584c0.22528-53.88288 44.09344-97.42336 97.97632-97.19808s97.3824 44.1344 97.1776 98.01728a97.5872 97.5872 0 0 1-97.9968 97.13664z m-41.32864-319.5904a42.65984 42.65984 0 1 1 85.31968 0 42.65984 42.65984 0 0 1-85.31968 0z m43.17184-124.43648a97.56672 97.56672 0 1 1 0.79872-195.1744 97.56672 97.56672 0 0 1-0.79872 195.1744zM733.5936 610.52928a97.60768 97.60768 0 1 1 0.88064-195.19488 97.60768 97.60768 0 0 1-0.88064 195.19488z" p-id="1462" fill="#ffffff"></path></svg></div>
             <div class="flex gap-4 overflow-x-auto pb-6 pt-2 snap-x snap-mandatory hide-scrollbar latest-movies-here"></div>
         </section>
-
         <!-- 影视评价系统 -->
         <section class="max-w-7xl mx-auto px-4 py-12">
             <h2 class="text-xl md:text-2xl font-semibold mb-4 md:mb-6">最新评价</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                 {volist name="latestMediaComment" id="latestMediaComment"}
                 <!--                判断是否登录-->
                 {if isset(session('r_user')->id)}
@@ -374,7 +311,6 @@
                 </div>
                 {/volist}
             </div>
-
             <div class="mt-8 text-center">
                 <a href="/media/user/comment" class="inline-flex items-center space-x-2 glass-effect px-6 py-3 rounded-full hover:bg-white/20 transition-colors">
                     <span>查看更多评价</span>
@@ -384,7 +320,6 @@
                 </a>
             </div>
         </section>
-
         <!-- 服务器状态区域 -->
         <section class="max-w-7xl mx-auto px-4 py-12">
             <h2 class="text-xl md:text-2xl font-semibold mb-4 md:mb-6">线路状态</h2>
@@ -393,13 +328,11 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 line-list-here">
             </div>
         </section>
-
         <footer class="text-center py-4">
             <p>&copy; <?php echo date("Y"); ?> Powered By Randallanjie.com</p>
         </footer>
     </main>
 </div>
-
 <!-- 站点日志弹出框 -->
 <div id="changelogDialog" class="changelog-dialog">
     <div class="changelog-content">
@@ -552,10 +485,8 @@
         </div>
     </div>
 </div>
-
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-
         $.ajax({
             url: '/media/index/getLatestMedia',
             type: 'POST',
@@ -590,7 +521,6 @@
                 document.getElementById('latest-update-loading').style.display = 'none';
             }
         });
-
         $.ajax({
             url: '/media/index/getLineStatus',
             type: 'POST',
@@ -626,48 +556,39 @@
                 document.getElementById('line-list-loading').style.display = 'none';
             }
         });
-
         const menuButton = document.getElementById('menuButton');
         const mobileMenu = document.getElementById('mobileMenu');
-
         menuButton.addEventListener('click', function () {
             mobileMenu.classList.toggle('active');
         });
-
         document.addEventListener('click', function (event) {
             if (!menuButton.contains(event.target) && !mobileMenu.contains(event.target)) {
                 mobileMenu.classList.remove('active');
             }
         });
-
         // 站点日志弹出框功能
         const desktopChangelogButton = document.getElementById('desktopChangelogButton');
         const mobileChangelogButton = document.getElementById('mobileChangelogButton');
         const changelogDialog = document.getElementById('changelogDialog');
         const closeChangelog = document.getElementById('closeChangelog');
-
         const openChangelog = function () {
             changelogDialog.classList.add('active');
             document.body.style.overflow = 'hidden';
             mobileMenu.classList.remove('active');
         };
-
         const closeChangelogFn = function () {
             changelogDialog.classList.remove('active');
             document.body.style.overflow = '';
         };
-
         desktopChangelogButton.addEventListener('click', openChangelog);
         mobileChangelogButton.addEventListener('click', openChangelog);
         closeChangelog.addEventListener('click', closeChangelogFn);
-
         changelogDialog.addEventListener('click', function (event) {
             if (event.target === changelogDialog) {
                 closeChangelogFn();
             }
         });
     });
-
     function getDelay(i, url) {
         const delaySpan = document.getElementById("line-" + i + "-delay");
         delaySpan.onclick = null;
