@@ -39,11 +39,40 @@
 
       <div class="flex items-center gap-3">
         <button id="btnSave" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 transition">保存</button>
-        <button id="btnB2" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">设备登录(B2) - 占位</button>
+        <button id="btnB2Gen" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">生成二维码(B2)</button>
+        <button id="btnB2Complete" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition" disabled>完成授权</button>
         <span id="status" class="text-sm text-gray-300"></span>
       </div>
 
-      <pre id="log" class="w-full min-h-[120px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-black/20 border border-white/10 rounded p-4">
+          <div class="text-sm text-gray-300 mb-2">B2 扫码登录（PKCE）</div>
+          <div class="space-y-2">
+            <div>
+              <label class="block text-sm text-gray-300 mb-1">Client ID（115 开放平台）</label>
+              <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="请输入 client_id" />
+            </div>
+            <div>
+              <label class="block text-sm text-gray-300 mb-1">名称（可选）</label>
+              <input id="b2Name" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：我的115" value="115" />
+            </div>
+            <div class="text-xs text-gray-400">点击“生成二维码(B2)”后，用 115 App 扫码并确认，然后点“完成授权”。</div>
+          </div>
+        </div>
+        <div class="bg-black/20 border border-white/10 rounded p-4">
+          <div class="text-sm text-gray-300 mb-2">二维码</div>
+          <div class="flex items-center gap-4">
+            <img id="qrImg" class="w-[180px] h-[180px] bg-black/30 rounded border border-white/10" alt="qr" />
+            <div class="text-sm text-gray-300">
+              <div>状态：<span id="qrStatus">未生成</span></div>
+              <div class="text-xs text-gray-400 mt-2">session：<span id="qrSession">-</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<pre id="log" class="w-full min-h-[120px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
     </div>
   </div>
 </div>
@@ -75,9 +104,82 @@ document.getElementById('btnSave').addEventListener('click', async ()=>{
   document.getElementById('status').textContent='完成';
 });
 
-document.getElementById('btnB2').addEventListener('click', async ()=>{
-  appendLog('B2 设备登录流程后续版本实现（需要 115 协议/签名逻辑）。');
+
+let b2Timer=null;
+let b2SessionId='';
+
+async function getJson(url){
+  const res = await fetch(url);
+  return await res.json();
+}
+
+function setQrStatus(t){
+  document.getElementById('qrStatus').textContent=t;
+}
+
+async function pollStatus(){
+  if(!b2SessionId) return;
+  try{
+    const r=await getJson('/media/admin/strm115B2Status?session_id='+encodeURIComponent(b2SessionId));
+    appendLog('status: '+JSON.stringify(r));
+    if(r && r.code===200){
+      const st = (r.data && r.data.status!=null) ? r.data.status : null;
+      if(st===0) setQrStatus('等待扫码');
+      else if(st===1) setQrStatus('已扫码，待确认');
+      else if(st===2) setQrStatus('已确认，可完成授权');
+      else if(st===-2) { setQrStatus('已取消'); stopPoll(); }
+      else setQrStatus('未知：'+st);
+      if(st===2){
+        document.getElementById('btnB2Complete').disabled=false;
+      }
+    } else {
+      setQrStatus('异常');
+    }
+  }catch(e){
+    appendLog('poll error: '+e);
+  }
+}
+
+function stopPoll(){
+  if(b2Timer){ clearInterval(b2Timer); b2Timer=null; }
+}
+
+document.getElementById('btnB2Gen').addEventListener('click', async ()=>{
+  const clientId=document.getElementById('b2ClientId').value.trim();
+  const name=document.getElementById('b2Name').value.trim() || '115';
+  if(!clientId){
+    rStatusMessage.error('client_id 不能为空');
+    return;
+  }
+  document.getElementById('btnB2Complete').disabled=true;
+  stopPoll();
+  setQrStatus('生成中...');
+  const r=await postJson('/media/admin/strm115B2Qr', {client_id: clientId, name});
+  appendLog('gen: '+JSON.stringify(r));
+  if(r && r.code===200){
+    b2SessionId = r.data.session_id;
+    document.getElementById('qrSession').textContent=b2SessionId;
+    document.getElementById('qrImg').src = '/media/admin/strm115B2QrPng?session_id='+encodeURIComponent(b2SessionId)+'&_t='+(Date.now());
+    setQrStatus('等待扫码');
+    b2Timer=setInterval(pollStatus, 2000);
+  } else {
+    setQrStatus('生成失败');
+  }
 });
+
+document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
+  if(!b2SessionId){ rStatusMessage.error('请先生成二维码'); return; }
+  const r=await postJson('/media/admin/strm115B2Complete', {session_id: b2SessionId});
+  appendLog('complete: '+JSON.stringify(r));
+  if(r && r.code===200){
+    setQrStatus('授权完成');
+    stopPoll();
+    rStatusMessage.success('授权完成');
+  } else {
+    rStatusMessage.error((r && r.message) ? r.message : '授权失败');
+  }
+});
+
 </script>
 
 {include file="public/_footer" /}

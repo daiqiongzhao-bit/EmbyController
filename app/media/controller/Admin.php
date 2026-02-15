@@ -1919,4 +1919,305 @@ public function strmTaskStart()
         return response($content ?: '', 200, ['Content-Type' => 'text/plain; charset=utf-8']);
     }
 
+
+    // ===================== 115 B2 Device Login (PKCE) =====================
+
+    private function strm115_require_admin()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        return null;
+    }
+
+    
+
+    private function strm115_cfg_upsert($appName, $key, $value)
+    {
+        $m = new \app\media\model\SysConfigModel();
+        $row = $m->where(['appName' => $appName, 'key' => $key])->find();
+        if ($row) {
+            $row->save(['value' => (string)$value]);
+        } else {
+            $m->save([
+                'appName' => (string)$appName,
+                'key' => (string)$key,
+                'value' => (string)$value,
+                'type' => 0,
+                'status' => 1,
+            ]);
+        }
+    }
+private function strm115_session_dir()
+    {
+        $dir = runtime_path() . 'strm115/sessions/';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        return $dir;
+    }
+
+    private function strm115_make_session_id()
+    {
+        $uid = session('r_user') ? (session('r_user')->id ?? 0) : 0;
+        return $uid . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(6));
+    }
+
+    private function strm115_b64_sha256($str)
+    {
+        return base64_encode(hash('sha256', $str, true));
+    }
+
+    private function strm115_http_post_form($url, $form, $timeoutSec = 25)
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSec);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'accept: application/json',
+            'Content-Type: application/x-www-form-urlencoded',
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($form));
+        // allow self-signed / mitm; user controls endpoint. Keep strict? 115 endpoints are trusted https.
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $resp = curl_exec($ch);
+        if ($resp === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            return [false, 'curl_error: ' . $err, 0, null];
+        }
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $json = json_decode($resp, true);
+        return [true, $resp, $code, $json];
+    }
+
+    private function strm115_http_get($url, $timeoutSec = 15)
+    {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSec);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'accept: application/json',
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $resp = curl_exec($ch);
+        if ($resp === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            return [false, 'curl_error: ' . $err, 0, null];
+        }
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $json = json_decode($resp, true);
+        return [true, $resp, $code, $json];
+    }
+
+    // POST /media/admin/strm115B2Qr  body: {client_id,name}
+    public function strm115B2Qr()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $clientId = (string)input('client_id', '');
+        $name = (string)input('name', '115');
+        if ($clientId === '') {
+            return json(['code' => 400, 'message' => 'client_id 不能为空']);
+        }
+
+        // code_verifier: 43~128 chars URL-safe; we use hex+random
+        $codeVerifier = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
+        if (strlen($codeVerifier) < 43) {
+            $codeVerifier = $codeVerifier . str_repeat('a', 43 - strlen($codeVerifier));
+        }
+        $codeVerifier = substr($codeVerifier, 0, 64);
+        $codeChallenge = $this->strm115_b64_sha256($codeVerifier);
+
+        [$ok, $raw, $http, $j] = $this->strm115_http_post_form(
+            'https://passportapi.115.com/open/authDeviceCode',
+            [
+                'client_id' => $clientId,
+                'code_challenge' => $codeChallenge,
+                'code_challenge_method' => 'sha256',
+            ],
+            25
+        );
+        if (!$ok) {
+            return json(['code' => 500, 'message' => '获取二维码失败：' . $raw]);
+        }
+        if (!is_array($j) || !isset($j['data'])) {
+            return json(['code' => 500, 'message' => '获取二维码失败：响应解析失败', 'raw' => $raw]);
+        }
+        $data = $j['data'];
+        // expected: uid,time,qrcode,sign
+        if (!isset($data['uid'], $data['time'], $data['qrcode'], $data['sign'])) {
+            return json(['code' => 500, 'message' => '获取二维码失败：返回字段不完整', 'raw' => $j]);
+        }
+
+        $sessionId = $this->strm115_make_session_id();
+        $sess = [
+            'session_id' => $sessionId,
+            'created_at' => time(),
+            'client_id' => $clientId,
+            'name' => $name,
+            'code_verifier' => $codeVerifier,
+            'uid' => (string)$data['uid'],
+            'time' => (string)$data['time'],
+            'sign' => (string)$data['sign'],
+            'qrcode' => (string)$data['qrcode'],
+        ];
+        file_put_contents($this->strm115_session_dir() . $sessionId . '.json', json_encode($sess, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        return json(['code' => 200, 'data' => [
+            'session_id' => $sessionId,
+            'qr_code_data' => $sess['qrcode'],
+        ], 'message' => '请使用115手机客户端扫描二维码']);
+    }
+
+    // GET /media/admin/strm115B2QrPng?session_id=...
+    public function strm115B2QrPng()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $sessionId = (string)input('session_id', '');
+        if ($sessionId === '') {
+            return response('bad request', 400);
+        }
+        $path = $this->strm115_session_dir() . basename($sessionId) . '.json';
+        if (!is_file($path)) {
+            return response('not found', 404);
+        }
+        $sess = json_decode(file_get_contents($path), true);
+        $data = $sess['qrcode'] ?? '';
+        if ($data === '') {
+            return response('not found', 404);
+        }
+
+        // Generate PNG QR code locally (endroid/qr-code)
+        try {
+            $qr = \Endroid\QrCode\QrCode::create($data)->setSize(260);
+            $writer = new \Endroid\QrCode\Writer\PngWriter();
+            $result = $writer->write($qr);
+            return response($result->getString(), 200, ['Content-Type' => 'image/png']);
+        } catch (\Throwable $e) {
+            return response('qr error: ' . $e->getMessage(), 500);
+        }
+    }
+
+    // GET /media/admin/strm115B2Status?session_id=...
+    public function strm115B2Status()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $sessionId = (string)input('session_id', '');
+        if ($sessionId === '') {
+            return json(['code' => 400, 'message' => 'session_id 不能为空']);
+        }
+        $path = $this->strm115_session_dir() . basename($sessionId) . '.json';
+        if (!is_file($path)) {
+            return json(['code' => 404, 'message' => '会话不存在或已过期']);
+        }
+        $sess = json_decode(file_get_contents($path), true);
+        if (!$sess) {
+            return json(['code' => 500, 'message' => '会话读取失败']);
+        }
+        if (time() - (int)($sess['created_at'] ?? 0) > 15 * 60) {
+            @unlink($path);
+            return json(['code' => 410, 'message' => '会话已过期']);
+        }
+
+        $uid = urlencode((string)$sess['uid']);
+        $time = urlencode((string)$sess['time']);
+        $sign = urlencode((string)$sess['sign']);
+
+        [$ok, $raw, $http, $j] = $this->strm115_http_get("https://qrcodeapi.115.com/get/status/?uid={$uid}&time={$time}&sign={$sign}", 15);
+        if (!$ok) {
+            return json(['code' => 500, 'message' => '查询状态失败：' . $raw]);
+        }
+        $status = null;
+        if (is_array($j) && isset($j['data']['status'])) {
+            $status = (int)$j['data']['status'];
+        }
+        return json(['code' => 200, 'data' => ['status' => $status, 'raw' => $j]]);
+    }
+
+    // POST /media/admin/strm115B2Complete  body: {session_id}
+    public function strm115B2Complete()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $sessionId = (string)input('session_id', '');
+        if ($sessionId === '') {
+            return json(['code' => 400, 'message' => 'session_id 不能为空']);
+        }
+        $path = $this->strm115_session_dir() . basename($sessionId) . '.json';
+        if (!is_file($path)) {
+            return json(['code' => 404, 'message' => '会话不存在或已过期']);
+        }
+        $sess = json_decode(file_get_contents($path), true);
+        if (!$sess) {
+            return json(['code' => 500, 'message' => '会话读取失败']);
+        }
+
+        [$ok, $raw, $http, $j] = $this->strm115_http_post_form(
+            'https://passportapi.115.com/open/deviceCodeToToken',
+            [
+                'uid' => (string)$sess['uid'],
+                'code_verifier' => (string)$sess['code_verifier'],
+            ],
+            25
+        );
+        if (!$ok) {
+            return json(['code' => 500, 'message' => '获取token失败：' . $raw]);
+        }
+        if (!is_array($j) || !isset($j['data']['access_token'])) {
+            return json(['code' => 500, 'message' => '获取token失败：返回字段不完整', 'raw' => $j]);
+        }
+        $data = $j['data'];
+
+        $expiresIn = (int)($data['expires_in'] ?? 0);
+        $expiresAt = $expiresIn > 0 ? (time() + $expiresIn) : 0;
+
+        // persist to sys_config
+        $cfg = new \app\media\model\SysConfigModel();
+        $save = [
+            'enabled' => 1,
+            'b2_client_id' => (string)$sess['client_id'],
+            'b2_name' => (string)$sess['name'],
+            'b2_access_token' => (string)$data['access_token'],
+            'b2_refresh_token' => (string)($data['refresh_token'] ?? ''),
+            'b2_expires_in' => $expiresIn,
+            'b2_expires_at' => $expiresAt,
+        ];
+        foreach ($save as $k => $v) {
+            $this->strm115_cfg_upsert('strm115', $k, is_scalar($v) ? (string)$v : json_encode($v));
+        }
+
+        // cleanup session
+        @unlink($path);
+
+        $masked = function($t) {
+            if ($t === '' || $t === null) return '';
+            $t = (string)$t;
+            if (strlen($t) <= 10) return str_repeat('*', strlen($t));
+            return substr($t, 0, 5) . str_repeat('*', strlen($t) - 10) . substr($t, -5);
+        };
+
+        return json(['code' => 200, 'message' => '授权完成', 'data' => [
+            'access_token' => $masked($data['access_token']),
+            'refresh_token' => $masked((string)($data['refresh_token'] ?? '')),
+            'expires_in' => $expiresIn,
+            'expires_at' => $expiresAt,
+        ]]);
+    }
+
 }
