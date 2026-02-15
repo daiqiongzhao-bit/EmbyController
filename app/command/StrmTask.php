@@ -49,6 +49,7 @@ class StrmTask extends Command
         $task['startedAt'] = date('Y-m-d H:i:s');
         $task['countStrm'] = 0;
         $task['countSkip'] = 0;
+        $task['countDel'] = 0;
         $task['error'] = '';
         @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
 
@@ -151,7 +152,7 @@ class StrmTask extends Command
             $i++;
             if (($i % 200) === 0) {
                 @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
-                $writeLog('progress: countStrm=' . $task['countStrm'] . ' countSkip=' . $task['countSkip']);
+                $writeLog('progress: countStrm=' . $task['countStrm'] . ' countSkip=' . $task['countSkip'] . ' countDel=' . ($task['countDel'] ?? 0));
             }
         }
 
@@ -175,6 +176,7 @@ class StrmTask extends Command
                     if ($cur === false) continue;
                     if (strpos($cur, '/media/strm/play?path=') === false) continue;
                     @unlink($p2);
+                    $task['countDel']++;
                 }
             }
         }
@@ -186,7 +188,7 @@ class StrmTask extends Command
         $task['finishedAt'] = date('Y-m-d H:i:s');
         $task['costMs'] = (int)round((microtime(true) - $t0) * 1000);
         @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
-        $writeLog('done: status=' . $task['status'] . ' countStrm=' . $task['countStrm'] . ' countSkip=' . $task['countSkip'] . ' costMs=' . $task['costMs']);
+        $writeLog('done: status=' . $task['status'] . ' countStrm=' . $task['countStrm'] . ' countSkip=' . $task['countSkip'] . ' countDel=' . ($task['countDel'] ?? 0) . ' costMs=' . $task['costMs']);
 
         return 0;
     }

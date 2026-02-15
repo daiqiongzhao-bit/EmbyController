@@ -1360,6 +1360,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
         $t0 = microtime(true);
         $countStrm = 0;
         $countSkip = 0;
+        $countDel = 0;
 
         // determine base url from current request
         $base = $baseUrl !== '' ? rtrim($baseUrl, '/') : rtrim(Request::domain(), '/');
@@ -1430,6 +1431,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
                     // only delete .strm that points to our play endpoint
                     if (strpos($cur, '/media/strm/play?path=') === false) continue;
                     @unlink($p2);
+                    $countDel++;
                 }
             }
         }
@@ -1474,6 +1476,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
             $lines[] = 'overwrite=' . ($overwrite ? '1' : '0');
             $lines[] = 'result.countStrm=' . $countStrm;
             $lines[] = 'result.countSkip=' . $countSkip;
+            $lines[] = 'result.countDel=' . $countDel;
             $lines[] = 'result.costMs=' . $costMs;
             file_put_contents($logPath, implode(PHP_EOL, $lines) . PHP_EOL);
 
@@ -1487,6 +1490,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
             'incremental' => $incremental,
                 'countStrm' => $countStrm,
                 'countSkip' => $countSkip,
+                'countDel' => $countDel,
                 'costMs' => $costMs,
                 'logFile' => $logFile,
             ];
@@ -1499,7 +1503,8 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
             }
         } catch (\Throwable $e) {
         }
-        return json(['code' => 200, 'data' => ['countStrm' => $countStrm, 'countSkip' => $countSkip, 'costMs' => $costMs]]);
+        return json(['code' => 200, 'data' => ['countStrm' => $countStrm, 'countSkip' => $countSkip,
+                'countDel' => $countDel, 'costMs' => $costMs]]);
     }
 
 

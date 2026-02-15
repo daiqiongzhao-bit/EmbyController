@@ -135,6 +135,7 @@ document.getElementById('btnGen').addEventListener('click', async ()=>{
     document.getElementById('status').textContent='完成';
     appendLog('完成。生成文件数: '+r.data.countStrm);
     appendLog('跳过文件数: '+r.data.countSkip);
+    if(r.data.countDel!==undefined){appendLog('删除文件数: '+r.data.countDel);}
     appendLog('耗时(ms): '+r.data.costMs);
   }catch(e){
     document.getElementById('status').textContent='异常';
@@ -190,7 +191,7 @@ async function fetchTasks(){
       div.innerHTML = '<span class="text-gray-300">'+(t.createdAt||'')+'</span> '
         + '<a class=\"text-blue-300 underline\" href=\"javascript:void(0)\" onclick=\"openTaskDetail('+(t.id||'')+')\">'+(t.id||'')+'</a> '
         + '<span class="text-yellow-200">'+status+'</span> '
-        + '<span class="text-gray-300">strm='+(t.countStrm||0)+' skip='+(t.countSkip||0)+'</span>'
+        + '<span class="text-gray-300">strm='+(t.countStrm||0)+' skip='+(t.countSkip||0)+' del='+(t.countDel||0)+'</span>'
         + logLink + btnStop;
       el.appendChild(div);
     });
