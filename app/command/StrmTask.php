@@ -57,6 +57,7 @@ class StrmTask extends Command
         $baseUrl = (string)($task['baseUrl'] ?? '');
         $exts = (string)($task['exts'] ?? 'mkv,mp4,avi,mov,m4v');
         $overwrite = (bool)($task['overwrite'] ?? false);
+        $incremental = array_key_exists('incremental', $task) ? (bool)$task['incremental'] : true;
 
         $writeLog('taskId=' . $taskId);
         $writeLog('srcDir=' . $srcDir);
@@ -64,6 +65,7 @@ class StrmTask extends Command
         $writeLog('baseUrl=' . ($baseUrl !== '' ? $baseUrl : '(auto)'));
         $writeLog('exts=' . $exts);
         $writeLog('overwrite=' . ($overwrite ? '1' : '0'));
+        $writeLog('incremental=' . ($incremental ? '1' : '0'));
 
         $t0 = microtime(true);
 
@@ -117,6 +119,16 @@ class StrmTask extends Command
             $outDirPath = dirname($outPath);
             if (!is_dir($outDirPath)) {
                 @mkdir($outDirPath, 0755, true);
+            }
+
+            // incremental: if file exists and content matches expected URL, skip
+            if ($incremental && is_file($outPath)) {
+                $cur = @file_get_contents($outPath);
+                $exp = $playPrefix . rawurlencode($absPath);
+                if ($cur !== false && trim($cur) === $exp) {
+                    $task['countSkip']++;
+                    continue;
+                }
             }
 
             if (is_file($outPath) && !$overwrite) {

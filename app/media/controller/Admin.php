@@ -1388,6 +1388,16 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
                 @mkdir($outDirPath, 0755, true);
             }
 
+            // incremental: if file exists and content matches expected URL, skip
+            if ($incremental && is_file($outPath)) {
+                $cur = @file_get_contents($outPath);
+                $exp = $playPrefix . rawurlencode($absPath);
+                if ($cur !== false && trim($cur) === $exp) {
+                    $countSkip++;
+                    continue;
+                }
+            }
+
             if (is_file($outPath) && !$overwrite) {
                 $countSkip++;
                 continue;
@@ -1450,6 +1460,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
                 'baseUrl' => $baseUrl,
                 'exts' => implode(',', $extList),
                 'overwrite' => $overwrite,
+            'incremental' => $incremental,
                 'countStrm' => $countStrm,
                 'countSkip' => $countSkip,
                 'costMs' => $costMs,
@@ -1483,6 +1494,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
         $baseUrl = trim((string)($req['baseUrl'] ?? ''));
         $exts = trim((string)($req['exts'] ?? 'mkv,mp4,avi,mov,m4v'));
         $overwrite = !empty($req['overwrite']);
+        $incremental = array_key_exists('incremental', $req) ? (bool)$req['incremental'] : true;
         $saveCfg = !empty($req['saveCfg']);
 
         if ($srcDir === '' || $outDir === '') {
@@ -1532,6 +1544,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
             'baseUrl' => $baseUrl,
             'exts' => $exts,
             'overwrite' => $overwrite,
+            'incremental' => $incremental,
             'logFile' => $logFile,
             'pid' => 0,
             'countStrm' => 0,
