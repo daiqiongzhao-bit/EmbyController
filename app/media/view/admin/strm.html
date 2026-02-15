@@ -178,7 +178,7 @@ async function fetchTasks(){
         logLink=' <a class="text-blue-400 underline" target="_blank" href="/media/admin/strmLog?file='+encodeURIComponent(t.logFile)+'">log</a>';
       }
       div.innerHTML = '<span class="text-gray-300">'+(t.createdAt||'')+'</span> '
-        + '<span class="text-gray-100">'+(t.id||'')+'</span> '
+        + '<a class=\"text-blue-300 underline\" href=\"javascript:void(0)\" onclick=\"openTaskDetail('+(t.id||'')+')\">'+(t.id||'')+'</a> '
         + '<span class="text-yellow-200">'+status+'</span> '
         + '<span class="text-gray-300">strm='+(t.countStrm||0)+' skip='+(t.countSkip||0)+'</span>'
         + logLink + btnStop;
@@ -225,6 +225,22 @@ document.getElementById('btnStartTask').addEventListener('click', async ()=>{
     appendLog('EXCEPTION: '+e);
   }
 });
+
+
+async function openTaskDetail(taskId){
+  appendLog('任务详情: '+taskId);
+  try{
+    const res = await fetch('/media/admin/strmTask?taskId='+encodeURIComponent(taskId));
+    const r = await res.json();
+    if(r.code!==200){
+      appendLog('ERROR: '+(r.message||'unknown'));
+      return;
+    }
+    appendLog(JSON.stringify(r.data, null, 2));
+  }catch(e){
+    appendLog('EXCEPTION: '+e);
+  }
+}
 </script>
 
 {include file="public/_footer" /}

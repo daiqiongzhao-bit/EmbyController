@@ -1337,6 +1337,10 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
         if ($srcDir === '' || $outDir === '') {
             return json(['code' => 400, 'message' => 'srcDir/outDir 不能为空']);
         }
+
+        if ($baseUrl === '') {
+            return json(['code' => 400, 'message' => '后台任务需要填写 baseUrl（例如 https://你的域名 或 http://IP:端口）']);
+        }
         if (!is_dir($srcDir)) {
             return json(['code' => 400, 'message' => '源目录不存在: '.$srcDir]);
         }
@@ -1485,6 +1489,10 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
             return json(['code' => 400, 'message' => 'srcDir/outDir 不能为空']);
         }
 
+        if ($baseUrl === '') {
+            return json(['code' => 400, 'message' => '后台任务需要填写 baseUrl（例如 https://你的域名 或 http://IP:端口）']);
+        }
+
         // keep existing save cfg behavior
         if ($saveCfg) {
             try {
@@ -1550,7 +1558,26 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
         return json(['code' => 200, 'data' => ['taskId' => $taskId, 'logFile' => $logFile]]);
     }
 
-    // GET /media/admin/strmTasks
+    
+    // GET /media/admin/strmTask?taskId=xxx
+    public function strmTask()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        $taskId = basename((string)input('taskId',''));
+        if ($taskId === '' || !str_starts_with($taskId, 'task_')) {
+            return json(['code' => 400, 'message' => 'taskId invalid']);
+        }
+        $path = runtime_path() . 'strm/tasks/' . $taskId . '.json';
+        if (!is_file($path)) {
+            return json(['code' => 404, 'message' => 'not found']);
+        }
+        $j = json_decode((string)file_get_contents($path), true) ?: [];
+        return json(['code' => 200, 'data' => $j]);
+    }
+
+// GET /media/admin/strmTasks
     public function strmTasks()
     {
         if (session('r_user') == null || session('r_user')['authority'] != 0) {
