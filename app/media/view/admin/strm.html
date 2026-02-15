@@ -42,6 +42,10 @@
           <span class="text-sm text-gray-300">增量（内容一致则跳过）</span>
         </label>
         <label class="flex items-center gap-2">
+          <input id="syncDelete" type="checkbox" class="accent-red-500" />
+          <span class="text-sm text-gray-300">同步删除输出中多余的 .strm（谨慎）</span>
+        </label>
+        <label class="flex items-center gap-2">
           <input id="saveCfg" type="checkbox" class="accent-blue-500" checked />
           <span class="text-sm text-gray-300">保存配置（下次默认填充）</span>
         </label>
@@ -116,12 +120,13 @@ document.getElementById('btnGen').addEventListener('click', async ()=>{
   const exts=document.getElementById('exts').value.trim();
   const overwrite=document.getElementById('overwrite').checked;
   const incremental=document.getElementById('incremental').checked;
+  const syncDelete=document.getElementById('syncDelete').checked;
   const saveCfg=document.getElementById('saveCfg').checked;
   document.getElementById('status').textContent='执行中...';
   document.getElementById('log').textContent='';
   appendLog('开始生成...');
   try{
-    const r = await postJson('/media/admin/strmGenerate', {srcDir,outDir,baseUrl,exts,overwrite,incremental,saveCfg});
+    const r = await postJson('/media/admin/strmGenerate', {srcDir,outDir,baseUrl,exts,overwrite,incremental,syncDelete,saveCfg});
     if(r.code!==200){
       document.getElementById('status').textContent='失败';
       appendLog('ERROR: '+(r.message||'unknown'));
@@ -211,12 +216,13 @@ document.getElementById('btnStartTask').addEventListener('click', async ()=>{
   const exts=document.getElementById('exts').value.trim();
   const overwrite=document.getElementById('overwrite').checked;
   const incremental=document.getElementById('incremental').checked;
+  const syncDelete=document.getElementById('syncDelete').checked;
   const saveCfg=document.getElementById('saveCfg').checked;
   document.getElementById('status').textContent='任务创建中...';
   document.getElementById('log').textContent='';
   appendLog('创建后台任务...');
   try{
-    const r = await postJson('/media/admin/strmTaskStart', {srcDir,outDir,baseUrl,exts,overwrite,incremental,saveCfg});
+    const r = await postJson('/media/admin/strmTaskStart', {srcDir,outDir,baseUrl,exts,overwrite,incremental,syncDelete,saveCfg});
     if(r.code!==200){
       document.getElementById('status').textContent='失败';
       appendLog('ERROR: '+(r.message||'unknown'));

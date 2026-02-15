@@ -58,6 +58,7 @@ class StrmTask extends Command
         $exts = (string)($task['exts'] ?? 'mkv,mp4,avi,mov,m4v');
         $overwrite = (bool)($task['overwrite'] ?? false);
         $incremental = array_key_exists('incremental', $task) ? (bool)$task['incremental'] : true;
+        $syncDelete = array_key_exists('syncDelete', $task) ? (bool)$task['syncDelete'] : false;
 
         $writeLog('taskId=' . $taskId);
         $writeLog('srcDir=' . $srcDir);
@@ -66,6 +67,7 @@ class StrmTask extends Command
         $writeLog('exts=' . $exts);
         $writeLog('overwrite=' . ($overwrite ? '1' : '0'));
         $writeLog('incremental=' . ($incremental ? '1' : '0'));
+        $writeLog('syncDelete=' . ($syncDelete ? '1' : '0'));
 
         $t0 = microtime(true);
 
@@ -96,6 +98,8 @@ class StrmTask extends Command
         }
         if (!$extList) $extList = ['mkv','mp4','avi','mov','m4v'];
 
+        $expected = [];
+
         $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($srcRootReal, \FilesystemIterator::SKIP_DOTS));
         $i = 0;
         foreach ($rii as $file) {
@@ -115,6 +119,8 @@ class StrmTask extends Command
 
             $rel = ltrim(str_replace($srcRootReal, '', $absPath), DIRECTORY_SEPARATOR);
             $outPath = rtrim($outDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . preg_replace('/\.[^.]+$/', '', $rel) . '.strm';
+
+            $expected[$outPath] = 1;
 
             $outDirPath = dirname($outPath);
             if (!is_dir($outDirPath)) {
@@ -146,6 +152,30 @@ class StrmTask extends Command
             if (($i % 200) === 0) {
                 @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
                 $writeLog('progress: countStrm=' . $task['countStrm'] . ' countSkip=' . $task['countSkip']);
+            }
+        }
+
+        // sync delete output extra strm
+        if ($syncDelete) {
+            $outRootReal = realpath($outDir);
+            if ($outRootReal !== false) {
+                $rii2 = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($outRootReal, \FilesystemIterator::SKIP_DOTS));
+                foreach ($rii2 as $f2) {
+                    if (is_file($stopFile)) {
+                        $writeLog('STOP: stop file detected during delete');
+                        $task['status'] = 'stopped';
+                        break;
+                    }
+                    if (!$f2->isFile()) continue;
+                    if (strtolower($f2->getExtension()) !== 'strm') continue;
+                    $p2 = $f2->getRealPath();
+                    if (!$p2) continue;
+                    if (isset($expected[$p2])) continue;
+                    $cur = @file_get_contents($p2);
+                    if ($cur === false) continue;
+                    if (strpos($cur, '/media/strm/play?path=') === false) continue;
+                    @unlink($p2);
+                }
             }
         }
 

@@ -1370,6 +1370,8 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
             return json(['code' => 500, 'message' => '无法解析源目录']);
         }
 
+        $expected = [];
+
         $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($srcRootReal, \FilesystemIterator::SKIP_DOTS));
         foreach ($rii as $file) {
             /** @var \SplFileInfo $file */
@@ -1382,6 +1384,8 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
 
             $rel = ltrim(str_replace($srcRootReal, '', $absPath), DIRECTORY_SEPARATOR);
             $outPath = rtrim($outDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . preg_replace('/\.[^.]+$/', '', $rel) . '.strm';
+
+            $expected[$outPath] = 1;
 
             $outDirPath = dirname($outPath);
             if (!is_dir($outDirPath)) {
@@ -1410,6 +1414,26 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
                 continue;
             }
             $countStrm++;
+        // sync delete output extra strm (safe: only .strm under outDir and created by our prefix)
+        if ($syncDelete) {
+            $outRootReal = realpath($outDir);
+            if ($outRootReal !== false) {
+                $rii2 = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($outRootReal, \FilesystemIterator::SKIP_DOTS));
+                foreach ($rii2 as $f2) {
+                    if (!$f2->isFile()) continue;
+                    if (strtolower($f2->getExtension()) !== 'strm') continue;
+                    $p2 = $f2->getRealPath();
+                    if (!$p2) continue;
+                    if (isset($expected[$p2])) continue;
+                    $cur = @file_get_contents($p2);
+                    if ($cur === false) continue;
+                    // only delete .strm that points to our play endpoint
+                    if (strpos($cur, '/media/strm/play?path=') === false) continue;
+                    @unlink($p2);
+                }
+            }
+        }
+
         }
 
         if ($saveCfg) {
@@ -1495,6 +1519,7 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
         $exts = trim((string)($req['exts'] ?? 'mkv,mp4,avi,mov,m4v'));
         $overwrite = !empty($req['overwrite']);
         $incremental = array_key_exists('incremental', $req) ? (bool)$req['incremental'] : true;
+        $syncDelete = !empty($req['syncDelete']);
         $saveCfg = !empty($req['saveCfg']);
 
         if ($srcDir === '' || $outDir === '') {
