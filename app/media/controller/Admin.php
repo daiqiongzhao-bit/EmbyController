@@ -1830,6 +1830,54 @@ public function strmTaskStart()
         return json(['code' => 200, 'data' => ['taskId' => $taskId]]);
     }
 
+
+
+    // GET /media/admin/strm115
+    public function strm115()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return response('forbidden', 403);
+        }
+        $cfg = new SysConfigModel();
+        $get = function($key, $def='') use ($cfg) {
+            $row = $cfg->where('appName','strm115')->where('key',$key)->find();
+            return $row ? $row['value'] : $def;
+        };
+        View::assign('cfg', [
+            'enabled' => (int)$get('enabled','0'),
+            'root_cid' => $get('root_cid',''),
+            'cookie' => $get('cookie',''),
+        ]);
+        return View::fetch('admin/strm_115');
+    }
+
+    // POST /media/admin/strm115Save
+    public function strm115Save()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        $enabled = !empty($req['enabled']) ? '1' : '0';
+        $rootCid = trim((string)($req['root_cid'] ?? ''));
+        $cookie = (string)($req['cookie'] ?? '');
+
+        $cfg = new SysConfigModel();
+        $upsert = function($key, $val) use ($cfg) {
+            $row = $cfg->where('appName','strm115')->where('key',$key)->find();
+            if ($row) {
+                $cfg->where('id', $row['id'])->update(['value' => (string)$val]);
+            } else {
+                $cfg->save(['appName'=>'strm115','key'=>$key,'value'=>(string)$val,'type'=>0,'status'=>1]);
+            }
+        };
+        $upsert('enabled', $enabled);
+        $upsert('root_cid', $rootCid);
+        $upsert('cookie', $cookie);
+
+        return json(['code'=>200,'data'=>['ok'=>1]]);
+    }
+
 // GET /media/admin/strmLogs
     public function strmLogs()
     {

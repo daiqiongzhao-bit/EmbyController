@@ -1,0 +1,83 @@
+{include file="public/_header" /}
+{include file="public/_aside" /}
+
+<div class="flex-1 p-6">
+  <div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">115 插件化（整合版）</h1>
+      <a class="text-blue-400 underline" href="/media/admin/strm">返回 STRM</a>
+    </div>
+
+    <div class="bg-white/5 rounded-xl p-6 space-y-4">
+      <div class="text-sm text-gray-300">
+        说明：本页用于配置 115 的登录信息与默认根目录。当前版本先提供配置与页面骨架，后续版本会实现：
+        <ul class="list-disc pl-5 mt-2 space-y-1 text-gray-400">
+          <li>设备登录（B2）/扫码确认 + 自动续期</li>
+          <li>目录树浏览与选择根目录（cid）</li>
+          <li>基于 fileId 的 302 直链播放</li>
+        </ul>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-gray-300 mb-1">启用 115 Provider</label>
+          <label class="flex items-center gap-2">
+            <input id="en" type="checkbox" class="accent-blue-500" {if isset($cfg.enabled) && $cfg.enabled==1}checked{/if} />
+            <span class="text-sm text-gray-300">enabled</span>
+          </label>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-300 mb-1">默认根目录 CID（可选）</label>
+          <input id="rootCid" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：0" value="{$cfg.root_cid|default=''}" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">115 Cookie（可选：用于手动登录）</label>
+        <textarea id="cookie" class="w-full min-h-[120px] px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="粘贴 Cookie。注意：敏感信息不会在日志中输出。">{$cfg.cookie|default=''}</textarea>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button id="btnSave" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 transition">保存</button>
+        <button id="btnB2" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">设备登录(B2) - 占位</button>
+        <span id="status" class="text-sm text-gray-300"></span>
+      </div>
+
+      <pre id="log" class="w-full min-h-[120px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+function appendLog(s){
+  const el=document.getElementById('log');
+  el.textContent += (s + "\n");
+  el.scrollTop = el.scrollHeight;
+}
+async function postJson(url, data){
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  return await res.json();
+}
+
+document.getElementById('btnSave').addEventListener('click', async ()=>{
+  document.getElementById('status').textContent='保存中...';
+  const payload={
+    enabled: document.getElementById('en').checked,
+    root_cid: document.getElementById('rootCid').value.trim(),
+    cookie: document.getElementById('cookie').value.trim(),
+  };
+  const r = await postJson('/media/admin/strm115Save', payload);
+  appendLog(JSON.stringify(r));
+  document.getElementById('status').textContent='完成';
+});
+
+document.getElementById('btnB2').addEventListener('click', async ()=>{
+  appendLog('B2 设备登录流程后续版本实现（需要 115 协议/签名逻辑）。');
+});
+</script>
+
+{include file="public/_footer" /}
