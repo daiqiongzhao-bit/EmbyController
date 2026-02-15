@@ -178,12 +178,19 @@ class Server extends BaseController
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            // 防止外部 Emby 接口卡死导致前端一直转圈
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 25);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'accept: application/json',
                 'Content-Type: application/json'
             ]);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
             $response = curl_exec($ch);
+            if ($response === false) {
+                $err = curl_error($ch);
+                return json(['code' => 500, 'message' => 'Emby 接口请求失败：' . $err]);
+            }
             // 如果是400错误，说明用户名已存在
             if (curl_getinfo($ch, CURLINFO_HTTP_CODE) == 400) {
                 return json(['code' => 400, 'message' => '用户名已存在']);
@@ -202,6 +209,8 @@ class Server extends BaseController
                 $ch = curl_init($url);
                 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 25);
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
                     'accept: */*',
                     'Content-Type: application/json'

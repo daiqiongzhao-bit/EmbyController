@@ -30,14 +30,29 @@
                 embyUserName: username
             };
             startMainLoading()
-            $.post('/media/server/create', data, function(res){
-                if(res.code === 200){
-                    rStatusMessage.success(res.message);
+            $.ajax({
+                url: '/media/server/create',
+                method: 'POST',
+                data: data,
+                dataType: 'json',
+                timeout: 30000,
+            }).done(function(res){
+                if(res && res.code === 200){
+                    rStatusMessage.success(res.message || '创建成功');
                     location.href = '/media/user/index';
                 }else{
-                    rStatusMessage.error(res.message);
+                    rStatusMessage.error((res && res.message) ? res.message : '创建失败');
                 }
-                stopMainLoading()
+            }).fail(function(xhr){
+                // 若登录失效后端可能会跳转登录页，这里兜底提示
+                if (xhr && (xhr.status === 302 || xhr.status === 401 || xhr.status === 403)) {
+                    rStatusMessage.error('登录已失效，请重新登录');
+                    location.href = '/media/user/login.html';
+                } else {
+                    rStatusMessage.error('请求失败，请稍后再试');
+                }
+            }).always(function(){
+                stopMainLoading();
             });
         } else {
             rStatusMessage.error('请输入用户名');
