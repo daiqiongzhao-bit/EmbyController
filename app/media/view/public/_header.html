@@ -1,4 +1,4 @@
-<nav class="fixed top-0 z-50 w-full px-4 py-4">
+<nav id="topNav" class="fixed top-0 z-50 w-full px-4 py-4">
     <div class="glass-effect rounded-full px-6 py-3 flex items-center justify-between">
         <div class="flex items-center space-x-4">
             <button
@@ -14,7 +14,6 @@
         </div>
         <div class="flex" id="userDropdown">
             <button class="flex justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 border border-gray-400 hover:text-accent-foreground h-9 hover:bg-gray-200 cursor-default rounded-full flex items-center px-[9px] bg-black mr-4 online-count">                0<p class="text-muted-foreground">离线</p>
-                0<p class="text-muted-foreground">离线</p>
                 <span class="h-2 w-2 rounded-full bg-red-500"></span>
             </button>
             <button
@@ -112,6 +111,17 @@
 </style>
 
 <script>
+window.topNav_deduped = window.topNav_deduped || false;
+if (!window.topNav_deduped) {
+  window.topNav_deduped = true;
+  window.addEventListener('DOMContentLoaded', function(){
+    try {
+      var navs=document.querySelectorAll('nav#topNav');
+      navs.forEach(function(n,i){ if(i>0) n.remove(); });
+    } catch(e) {}
+  });
+}
+
 let lastMessageId = 0;
 let ws = null;
 let wsReconnectTimer = null;
