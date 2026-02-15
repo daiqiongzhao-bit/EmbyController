@@ -142,4 +142,91 @@ class Strm extends BaseController
         fclose($fh);
         exit;
     }
+
+
+    private function loadStrmCfg(): array
+    {
+        try {
+            $cfg = new \app\media\model\SysConfigModel();
+            $rows = $cfg->where('appName','strm')->select();
+            $m = [];
+            foreach ($rows as $r) {
+                $m[$r['key']] = $r['value'];
+            }
+            return $m;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    // GET /media/strm/redirect?path=...
+    public function redirect()
+    {
+        $cfg = $this->loadStrmCfg();
+        $enabled = isset($cfg['redirect_enabled']) && (string)$cfg['redirect_enabled'] === '1';
+        if (!$enabled) {
+            return response('disabled', 403);
+        }
+        $base = trim((string)($cfg['redirect_base'] ?? ''));
+        if ($base === '' || !(str_starts_with($base, 'http://') || str_starts_with($base, 'https://'))) {
+            return response('bad config', 500);
+        }
+        $path = (string)input('path','');
+        if ($path === '') {
+            return response('bad request', 400);
+        }
+        $real = realpath($path);
+        if ($real === false) {
+            return response('not found', 404);
+        }
+
+        $allowed = (string)($cfg['allowed_roots'] ?? '');
+        $roots = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', $allowed))));
+        $matched = null;
+        foreach ($roots as $r) {
+            $rr = realpath($r);
+            if ($rr && str_starts_with($real, rtrim($rr, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+                $matched = $rr;
+                break;
+            }
+        }
+        if (!$matched) {
+            return response('forbidden', 403);
+        }
+
+        $rel = ltrim(str_replace(rtrim($matched, DIRECTORY_SEPARATOR), '', $real), DIRECTORY_SEPARATOR);
+        $parts = array_map('rawurlencode', preg_split('#[/\\\\]+#', $rel));
+        $url = rtrim($base, '/') . '/' . implode('/', $parts);
+
+        return redirect($url, 302);
+    }
+
+    // POST /media/strm/cloudDrive2Webhook
+    public function cloudDrive2Webhook()
+    {
+        $cfg = $this->loadStrmCfg();
+        $enabled = isset($cfg['clouddrive2_webhook_enabled']) && (string)$cfg['clouddrive2_webhook_enabled'] === '1';
+        if (!$enabled) {
+            return json(['code'=>403,'message'=>'webhook disabled']);
+        }
+        $body = (string)Request::getContent();
+        $payload = json_decode($body, true);
+        if (!is_array($payload)) {
+            $payload = ['raw' => $body];
+        }
+
+        $dir = runtime_path() . 'strm/events/';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $line = json_encode([
+            'time' => date('Y-m-d H:i:s'),
+            'ip' => Request::ip(),
+            'payload' => $payload,
+        ], JSON_UNESCAPED_UNICODE);
+        @file_put_contents($dir . 'clouddrive2_' . date('Ymd') . '.jsonl', $line . "\n", FILE_APPEND);
+
+        return json(['code'=>200,'data'=>['ok'=>1]]);
+    }
+
 }

@@ -190,6 +190,33 @@ class StrmTask extends Command
         @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
         $writeLog('done: status=' . $task['status'] . ' countStrm=' . $task['countStrm'] . ' countSkip=' . $task['countSkip'] . ' countDel=' . ($task['countDel'] ?? 0) . ' costMs=' . $task['costMs']);
 
-        return 0;
+        
+
+        // auto run next queued
+        try {
+            $dir = runtime_path() . 'strm/tasks/';
+            $files = glob($dir . 'task_*.json');
+            rsort($files);
+            $next = null;
+            foreach ($files as $f) {
+                $j = json_decode((string)file_get_contents($f), true) ?: [];
+                if (($j['status'] ?? '') === 'queued') { $next = $j['id']; break; }
+            }
+            if ($next) {
+                $cmd = 'cd ' . escapeshellarg((string)root_path()) . ' && ' . PHP_BINARY . ' think strm:run ' . escapeshellarg($next) . ' > /dev/null 2>&1 & echo $!';
+                $pid = (int)trim((string)shell_exec($cmd));
+                if ($pid > 0) {
+                    $path = $dir . $next . '.json';
+                    $t = json_decode((string)file_get_contents($path), true) ?: [];
+                    $t['pid'] = $pid;
+                    $t['status'] = 'running';
+                    $t['startedAt'] = date('Y-m-d H:i:s');
+                    file_put_contents($path, json_encode($t, JSON_UNESCAPED_UNICODE));
+                    $writeLog('auto-run next queued task: ' . $next . ' pid=' . $pid);
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+return 0;
     }
 }

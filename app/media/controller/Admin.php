@@ -1512,7 +1512,20 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
     
 
     // POST /media/admin/strmTaskStart
-    public function strmTaskStart()
+    
+
+    private function strmCfgUpsert($key, $val)
+    {
+        $cfg = new SysConfigModel();
+        $row = $cfg->where('appName','strm')->where('key',$key)->find();
+        if ($row) {
+            $cfg->where('id', $row['id'])->update(['value' => (string)$val]);
+        } else {
+            $cfg->save(['appName'=>'strm','key'=>$key,'value'=>(string)$val,'type'=>0,'status'=>1]);
+        }
+    }
+
+public function strmTaskStart()
     {
         if (session('r_user') == null || session('r_user')['authority'] != 0) {
             return json(['code' => 403, 'message' => '无权限']);
@@ -1618,6 +1631,157 @@ View::assign('defaultBaseUrl', $defaultBaseUrl);
         }
         $j = json_decode((string)file_get_contents($path), true) ?: [];
         return json(['code' => 200, 'data' => $j]);
+    }
+
+
+    // POST /media/admin/strmTaskRun
+    public function strmTaskRun()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        $taskId = basename((string)($req['taskId'] ?? ''));
+        if ($taskId === '' || !str_starts_with($taskId, 'task_')) {
+            return json(['code' => 400, 'message' => 'taskId invalid']);
+        }
+
+        // enforce single running
+        $dir = runtime_path() . 'strm/tasks/';
+        $files = glob($dir . 'task_*.json');
+        foreach ($files as $f) {
+            $j = json_decode((string)file_get_contents($f), true) ?: [];
+            if (($j['status'] ?? '') === 'running') {
+                return json(['code'=>409,'message'=>'已有任务运行中']);
+            }
+        }
+
+        $taskPath = $dir . $taskId . '.json';
+        if (!is_file($taskPath)) {
+            return json(['code'=>404,'message'=>'not found']);
+        }
+        $task = json_decode((string)file_get_contents($taskPath), true) ?: [];
+        if (($task['status'] ?? '') !== 'queued') {
+            return json(['code'=>400,'message'=>'only queued task can run']);
+        }
+
+        @unlink($dir . $taskId . '.stop');
+        $cmd = 'cd ' . escapeshellarg((string)root_path()) . ' && ' . PHP_BINARY . ' think strm:run ' . escapeshellarg($taskId) . ' > /dev/null 2>&1 & echo $!';
+        $pid = (int)trim((string)shell_exec($cmd));
+        if ($pid > 0) {
+            $task['pid'] = $pid;
+            $task['status'] = 'running';
+            $task['startedAt'] = date('Y-m-d H:i:s');
+            file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
+        }
+
+        return json(['code'=>200,'data'=>['taskId'=>$taskId,'pid'=>$pid]]);
+    }
+
+    // POST /media/admin/strmTaskRetry
+    public function strmTaskRetry()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        $taskId = basename((string)($req['taskId'] ?? ''));
+        if ($taskId === '' || !str_starts_with($taskId, 'task_')) {
+            return json(['code' => 400, 'message' => 'taskId invalid']);
+        }
+        $dir = runtime_path() . 'strm/tasks/';
+        $taskPath = $dir . $taskId . '.json';
+        if (!is_file($taskPath)) {
+            return json(['code'=>404,'message'=>'not found']);
+        }
+        $old = json_decode((string)file_get_contents($taskPath), true) ?: [];
+        $srcDir = (string)($old['srcDir'] ?? '');
+        $outDir = (string)($old['outDir'] ?? '');
+        $baseUrl = (string)($old['baseUrl'] ?? '');
+        $exts = (string)($old['exts'] ?? '');
+        $overwrite = !empty($old['overwrite']);
+        $incremental = array_key_exists('incremental', $old) ? (bool)$old['incremental'] : true;
+        $syncDelete = !empty($old['syncDelete']);
+
+        // reuse start logic (queued if another running)
+        $newId = 'task_' . date('Ymd_His') . '_' . substr(md5(uniqid('', true)), 0, 8);
+        $logFile = 'strm_' . $newId . '.log';
+        $newPath = $dir . $newId . '.json';
+        $task = [
+            'id' => $newId,
+            'status' => 'queued',
+            'createdAt' => date('Y-m-d H:i:s'),
+            'srcDir' => $srcDir,
+            'outDir' => $outDir,
+            'baseUrl' => $baseUrl,
+            'exts' => $exts,
+            'overwrite' => $overwrite,
+            'incremental' => $incremental,
+            'syncDelete' => $syncDelete,
+            'logFile' => $logFile,
+            'pid' => 0,
+            'countStrm' => 0,
+            'countSkip' => 0,
+            'countDel' => 0,
+            'costMs' => 0,
+            'error' => '',
+        ];
+        file_put_contents($newPath, json_encode($task, JSON_UNESCAPED_UNICODE));
+
+        return json(['code'=>200,'data'=>['taskId'=>$newId,'logFile'=>$logFile]]);
+    }
+
+    // POST /media/admin/strmSettings
+    public function strmSettings()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        if (array_key_exists('redirect_enabled', $req)) {
+            $this->strmCfgUpsert('redirect_enabled', !empty($req['redirect_enabled']) ? '1' : '0');
+        }
+        if (array_key_exists('redirect_base', $req)) {
+            $this->strmCfgUpsert('redirect_base', trim((string)$req['redirect_base']));
+        }
+        if (array_key_exists('clouddrive2_webhook_enabled', $req)) {
+            $this->strmCfgUpsert('clouddrive2_webhook_enabled', !empty($req['clouddrive2_webhook_enabled']) ? '1' : '0');
+        }
+        return json(['code'=>200,'data'=>['ok'=>1]]);
+    }
+
+    // GET /media/admin/strmEvents
+    public function strmEvents()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return response('forbidden', 403);
+        }
+        $dir = runtime_path() . 'strm/events/';
+        $files = [];
+        if (is_dir($dir)) {
+            $files = glob($dir . 'clouddrive2_*.jsonl');
+            rsort($files);
+        }
+        View::assign('files', array_map('basename', $files));
+        return View::fetch('admin/strm_events');
+    }
+
+    // GET /media/admin/strmEventFile?file=xxx
+    public function strmEventFile()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return response('forbidden', 403);
+        }
+        $file = basename((string)input('file',''));
+        if ($file === '' || !str_starts_with($file, 'clouddrive2_') || !str_ends_with($file, '.jsonl')) {
+            return response('bad request', 400);
+        }
+        $path = runtime_path() . 'strm/events/' . $file;
+        if (!is_file($path)) {
+            return response('not found', 404);
+        }
+        $content = file_get_contents($path);
+        return response($content ?: '', 200, ['Content-Type' => 'text/plain; charset=utf-8']);
     }
 
 // GET /media/admin/strmTasks

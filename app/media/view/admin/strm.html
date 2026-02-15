@@ -5,6 +5,7 @@
   <div class="max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">STRM 生成器</h1>
+      <div class="text-xs text-gray-400 mt-1">302直链与CloudDrive2 webhook 默认关闭：<a class="text-blue-400 underline" href="/media/admin/strmEvents" target="_blank">事件列表</a></div>
     </div>
 
     <div class="bg-white/5 rounded-xl p-6 space-y-4">
@@ -184,6 +185,14 @@ async function fetchTasks(){
       if(status==='running'){
         btnStop=' <button data-task="'+t.id+'" class="px-2 py-1 rounded bg-red-600/70 hover:bg-red-600">停止</button>';
       }
+      let btnRun='';
+      if(status==='queued'){
+        btnRun=' <button data-run="'+t.id+'" class="px-2 py-1 rounded bg-green-600/70 hover:bg-green-600">启动</button>';
+      }
+      let btnRetry='';
+      if(status==='failed' || status==='stopped' || status==='success'){
+        btnRetry=' <button data-retry="'+t.id+'" class="px-2 py-1 rounded bg-white/10 hover:bg-white/20">重试</button>';
+      }
       let logLink='';
       if(t.logFile){
         logLink=' <a class="text-blue-400 underline" target="_blank" href="/media/admin/strmLog?file='+encodeURIComponent(t.logFile)+'">log</a>';
@@ -192,7 +201,7 @@ async function fetchTasks(){
         + '<a class=\"text-blue-300 underline\" href=\"javascript:void(0)\" onclick=\"openTaskDetail('+(t.id||'')+')\">'+(t.id||'')+'</a> '
         + '<span class="text-yellow-200">'+status+'</span> '
         + '<span class="text-gray-300">strm='+(t.countStrm||0)+' skip='+(t.countSkip||0)+' del='+(t.countDel||0)+'</span>'
-        + logLink + btnStop;
+        + logLink + btnStop + btnRun + btnRetry;
       el.appendChild(div);
     });
 
