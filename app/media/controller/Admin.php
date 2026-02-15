@@ -1300,7 +1300,18 @@ class Admin extends BaseController
         View::assign('defaultSrc', $defaultSrc);
         View::assign('defaultOut', $defaultOut);
         View::assign('defaultExts', $defaultExts);
-        View::assign('defaultBaseUrl', $defaultBaseUrl);
+        
+        // last run summary
+        $lastRun = null;
+        try {
+            $cfg = new SysConfigModel();
+            $row = $cfg->where('appName','strm')->where('key','last_run')->find();
+            if ($row && $row['value']) {
+                $lastRun = json_decode($row['value'], true);
+            }
+        } catch (\Throwable $e) {}
+        View::assign('lastRun', $lastRun);
+View::assign('defaultBaseUrl', $defaultBaseUrl);
         return view();
     }
 
@@ -1409,7 +1420,90 @@ class Admin extends BaseController
         }
 
         $costMs = (int)round((microtime(true) - $t0) * 1000);
+
+        // write log + last run
+        try {
+            $logDir = runtime_path() . 'strm/logs/';
+            if (!is_dir($logDir)) { @mkdir($logDir, 0755, true); }
+            $logFile = 'strm_' . date('Ymd_His') . '.log';
+            $logPath = $logDir . $logFile;
+            $lines = [];
+            $lines[] = 'time=' . date('Y-m-d H:i:s');
+            $lines[] = 'srcDir=' . $srcDir;
+            $lines[] = 'outDir=' . $outDir;
+            $lines[] = 'baseUrl=' . ($baseUrl !== '' ? $baseUrl : '(auto)');
+            $lines[] = 'exts=' . implode(',', $extList);
+            $lines[] = 'overwrite=' . ($overwrite ? '1' : '0');
+            $lines[] = 'result.countStrm=' . $countStrm;
+            $lines[] = 'result.countSkip=' . $countSkip;
+            $lines[] = 'result.costMs=' . $costMs;
+            file_put_contents($logPath, implode(PHP_EOL, $lines) . PHP_EOL);
+
+            $last = [
+                'time' => date('Y-m-d H:i:s'),
+                'srcDir' => $srcDir,
+                'outDir' => $outDir,
+                'baseUrl' => $baseUrl,
+                'exts' => implode(',', $extList),
+                'overwrite' => $overwrite,
+                'countStrm' => $countStrm,
+                'countSkip' => $countSkip,
+                'costMs' => $costMs,
+                'logFile' => $logFile,
+            ];
+            $cfg = new SysConfigModel();
+            $row = $cfg->where('appName','strm')->where('key','last_run')->find();
+            if ($row) {
+                $cfg->where('id', $row['id'])->update(['value' => json_encode($last, JSON_UNESCAPED_UNICODE)]);
+            } else {
+                $cfg->save(['appName'=>'strm','key'=>'last_run','value'=>json_encode($last, JSON_UNESCAPED_UNICODE),'type'=>0,'status'=>1]);
+            }
+        } catch (\Throwable $e) {
+        }
         return json(['code' => 200, 'data' => ['countStrm' => $countStrm, 'countSkip' => $countSkip, 'costMs' => $costMs]]);
+    }
+
+
+
+    // GET /media/admin/strmLogs
+    public function strmLogs()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        $dir = runtime_path() . 'strm/logs/';
+        if (!is_dir($dir)) {
+            return json(['code' => 200, 'data' => []]);
+        }
+        $files = glob($dir . '*.log');
+        rsort($files);
+        $out = [];
+        foreach (array_slice($files, 0, 50) as $f) {
+            $out[] = [
+                'file' => basename($f),
+                'size' => filesize($f),
+                'mtime' => date('Y-m-d H:i:s', filemtime($f)),
+            ];
+        }
+        return json(['code' => 200, 'data' => $out]);
+    }
+
+    // GET /media/admin/strmLog?file=xxx.log
+    public function strmLog()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return response('forbidden', 403);
+        }
+        $file = basename((string)input('file',''));
+        if ($file === '' || !str_ends_with($file, '.log')) {
+            return response('bad request', 400);
+        }
+        $path = runtime_path() . 'strm/logs/' . $file;
+        if (!is_file($path)) {
+            return response('not found', 404);
+        }
+        $content = file_get_contents($path);
+        return response($content ?: '', 200, ['Content-Type' => 'text/plain; charset=utf-8']);
     }
 
 }

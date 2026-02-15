@@ -55,7 +55,23 @@
       </div>
     </div>
 
-    <div class="text-xs text-gray-400 mt-4">
+    
+    {if isset($lastRun) && $lastRun}
+    <div class="bg-white/5 rounded-xl p-4 mt-4">
+      <div class="text-sm text-gray-200 font-medium mb-2">最近一次运行</div>
+      <div class="text-xs text-gray-300 space-y-1">
+        <div>时间：{$lastRun.time}</div>
+        <div>源目录：{$lastRun.srcDir}</div>
+        <div>输出目录：{$lastRun.outDir}</div>
+        <div>生成：{$lastRun.countStrm}，跳过：{$lastRun.countSkip}，耗时(ms)：{$lastRun.costMs}</div>
+        {if isset($lastRun.logFile) && $lastRun.logFile}
+        <div>日志：<a class="text-blue-400 underline" href="/media/admin/strmLog?file={$lastRun.logFile}" target="_blank">{$lastRun.logFile}</a></div>
+        {/if}
+      </div>
+    </div>
+    {/if}
+
+<div class="text-xs text-gray-400 mt-4">
       <p>说明：</p>
       <ul class="list-disc pl-5 space-y-1 mt-1">
         <li>.strm 内容会指向本站点的 <code>/media/strm/play?path=...</code>，Emby 播放时由本系统读取本地文件并支持 Range。</li>
