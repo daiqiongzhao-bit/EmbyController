@@ -209,6 +209,15 @@ class Strm extends BaseController
         if (!$enabled) {
             return json(['code'=>403,'message'=>'webhook disabled']);
         }
+
+        $secret = trim((string)($cfg['clouddrive2_webhook_secret'] ?? ''));
+        if ($secret !== '') {
+            $got = (string)Request::header('X-Webhook-Token','');
+            if ($got === '') { $got = (string)input('token',''); }
+            if (!hash_equals($secret, $got)) {
+                return json(['code'=>403,'message'=>'bad token']);
+            }
+        }
         $body = (string)Request::getContent();
         $payload = json_decode($body, true);
         if (!is_array($payload)) {
@@ -224,7 +233,81 @@ class Strm extends BaseController
             'ip' => Request::ip(),
             'payload' => $payload,
         ], JSON_UNESCAPED_UNICODE);
+        // dedupe window (seconds)
+        $dedupeSec = (int)($cfg['clouddrive2_dedupe_sec'] ?? '120');
+        if ($dedupeSec < 0) $dedupeSec = 0;
+        $hash = sha1($line);
+        $dedupePath = $dir . 'dedupe.json';
+        $dedupe = [];
+        if (is_file($dedupePath)) {
+            $dedupe = json_decode((string)file_get_contents($dedupePath), true) ?: [];
+        }
+        $now = time();
+        // cleanup
+        foreach ($dedupe as $k=>$t) {
+            if (!is_int($t)) { unset($dedupe[$k]); continue; }
+            if ($dedupeSec > 0 && $t < $now - $dedupeSec) unset($dedupe[$k]);
+        }
+        if (isset($dedupe[$hash])) {
+            return json(['code'=>200,'data'=>['ok'=>1,'deduped'=>1]]);
+        }
+        $dedupe[$hash] = $now;
+        @file_put_contents($dedupePath, json_encode($dedupe));
+
         @file_put_contents($dir . 'clouddrive2_' . date('Ymd') . '.jsonl', $line . "\n", FILE_APPEND);
+
+        // optional trigger: create queued task
+        $trigger = isset($cfg['clouddrive2_trigger_enabled']) && (string)$cfg['clouddrive2_trigger_enabled'] === '1';
+        if ($trigger) {
+            try {
+                $taskDir = runtime_path() . 'strm/tasks/';
+                if (!is_dir($taskDir)) { @mkdir($taskDir, 0755, true); }
+                $srcDir = trim((string)($cfg['src_dir'] ?? ''));
+                $outDir = trim((string)($cfg['out_dir'] ?? ''));
+                $baseUrl = trim((string)($cfg['base_url'] ?? ''));
+                if ($srcDir !== '' && $outDir !== '' && $baseUrl !== '') {
+                    $taskId = 'task_' . date('Ymd_His') . '_' . substr(md5(uniqid('', true)), 0, 8);
+                    $logFile = 'strm_' . $taskId . '.log';
+                    $task = [
+                        'id' => $taskId,
+                        'status' => 'queued',
+                        'createdAt' => date('Y-m-d H:i:s'),
+                        'srcDir' => $srcDir,
+                        'outDir' => $outDir,
+                        'baseUrl' => $baseUrl,
+                        'exts' => (string)($cfg['exts'] ?? 'mkv,mp4,avi,mov,m4v'),
+                        'overwrite' => false,
+                        'incremental' => true,
+                        'syncDelete' => false,
+                        'logFile' => $logFile,
+                        'pid' => 0,
+                        'countStrm' => 0,
+                        'countSkip' => 0,
+                        'countDel' => 0,
+                        'costMs' => 0,
+                        'error' => '',
+                    ];
+                    @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
+                    // try kick if no running
+                    $hasRunning = false;
+                    foreach (glob($taskDir . 'task_*.json') as $f) {
+                        $j = json_decode((string)file_get_contents($f), true) ?: [];
+                        if (($j['status'] ?? '') === 'running') { $hasRunning = true; break; }
+                    }
+                    if (!$hasRunning) {
+                        $cmd = 'cd ' . escapeshellarg((string)root_path()) . ' && ' . PHP_BINARY . ' think strm:run ' . escapeshellarg($taskId) . ' > /dev/null 2>&1 & echo $!';
+                        $pid = (int)trim((string)shell_exec($cmd));
+                        if ($pid > 0) {
+                            $task['pid'] = $pid;
+                            $task['status'] = 'running';
+                            $task['startedAt'] = date('Y-m-d H:i:s');
+                            @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+            }
+        }
 
         return json(['code'=>200,'data'=>['ok'=>1]]);
     }

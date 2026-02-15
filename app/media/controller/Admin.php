@@ -1747,6 +1747,15 @@ public function strmTaskStart()
         if (array_key_exists('clouddrive2_webhook_enabled', $req)) {
             $this->strmCfgUpsert('clouddrive2_webhook_enabled', !empty($req['clouddrive2_webhook_enabled']) ? '1' : '0');
         }
+        if (array_key_exists('clouddrive2_webhook_secret', $req)) {
+            $this->strmCfgUpsert('clouddrive2_webhook_secret', trim((string)$req['clouddrive2_webhook_secret']));
+        }
+        if (array_key_exists('clouddrive2_dedupe_sec', $req)) {
+            $this->strmCfgUpsert('clouddrive2_dedupe_sec', (string)(int)$req['clouddrive2_dedupe_sec']);
+        }
+        if (array_key_exists('clouddrive2_trigger_enabled', $req)) {
+            $this->strmCfgUpsert('clouddrive2_trigger_enabled', !empty($req['clouddrive2_trigger_enabled']) ? '1' : '0');
+        }
         return json(['code'=>200,'data'=>['ok'=>1]]);
     }
 
