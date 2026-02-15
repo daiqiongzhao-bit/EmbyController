@@ -6,5 +6,6 @@ return [
     // 指令定义
     'commands' => [
         'websocket' => 'app\command\WebSocket',
+        'strm:run' => 'app\\command\\StrmTask',
     ],
 ];

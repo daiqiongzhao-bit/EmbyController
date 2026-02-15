@@ -44,11 +44,17 @@
       </div>
 
       <div class="flex items-center gap-3">
-        <button id="btnGen" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 transition">开始生成</button>
+        <button id="btnStartTask" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 transition">后台任务生成</button>
+        <button id="btnGen" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">同步生成(旧)</button>
         <button id="btnHealth" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">测试播放接口</button>
         <button id="btnListLogs" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">查看日志列表</button>
         <span id="status" class="text-sm text-gray-300"></span>
       </div>
+
+      <div class="bg-black/20 border border-white/10 rounded p-3 text-xs" id="taskList">
+          <div class="text-gray-200 mb-2">最近任务</div>
+          <div id="tasks" class="space-y-1"></div>
+        </div>
 
       <div>
         <label class="block text-sm text-gray-300 mb-1">日志</label>
@@ -148,6 +154,74 @@ document.getElementById('btnListLogs').addEventListener('click', async ()=>{
       appendLog('  '+location.origin+'/media/admin/strmLog?file='+encodeURIComponent(it.file));
     });
   }catch(e){
+    appendLog('EXCEPTION: '+e);
+  }
+});
+
+
+async function fetchTasks(){
+  try{
+    const res = await fetch('/media/admin/strmTasks');
+    const r = await res.json();
+    if(r.code!==200) return;
+    const el=document.getElementById('tasks');
+    el.innerHTML='';
+    (r.data||[]).forEach(t=>{
+      const div=document.createElement('div');
+      const status=t.status||'';
+      let btnStop='';
+      if(status==='running'){
+        btnStop=' <button data-task="'+t.id+'" class="px-2 py-1 rounded bg-red-600/70 hover:bg-red-600">停止</button>';
+      }
+      let logLink='';
+      if(t.logFile){
+        logLink=' <a class="text-blue-400 underline" target="_blank" href="/media/admin/strmLog?file='+encodeURIComponent(t.logFile)+'">log</a>';
+      }
+      div.innerHTML = '<span class="text-gray-300">'+(t.createdAt||'')+'</span> '
+        + '<span class="text-gray-100">'+(t.id||'')+'</span> '
+        + '<span class="text-yellow-200">'+status+'</span> '
+        + '<span class="text-gray-300">strm='+(t.countStrm||0)+' skip='+(t.countSkip||0)+'</span>'
+        + logLink + btnStop;
+      el.appendChild(div);
+    });
+
+    el.querySelectorAll('button[data-task]').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        const taskId=b.getAttribute('data-task');
+        await postJson('/media/admin/strmTaskStop', {taskId});
+        appendLog('已请求停止任务: '+taskId);
+        setTimeout(fetchTasks, 800);
+      });
+    });
+  }catch(e){}
+}
+
+setInterval(fetchTasks, 3000);
+setTimeout(fetchTasks, 300);
+
+document.getElementById('btnStartTask').addEventListener('click', async ()=>{
+  const srcDir=document.getElementById('srcDir').value.trim();
+  const outDir=document.getElementById('outDir').value.trim();
+  const baseUrl=document.getElementById('baseUrl').value.trim();
+  const exts=document.getElementById('exts').value.trim();
+  const overwrite=document.getElementById('overwrite').checked;
+  const saveCfg=document.getElementById('saveCfg').checked;
+  document.getElementById('status').textContent='任务创建中...';
+  document.getElementById('log').textContent='';
+  appendLog('创建后台任务...');
+  try{
+    const r = await postJson('/media/admin/strmTaskStart', {srcDir,outDir,baseUrl,exts,overwrite,saveCfg});
+    if(r.code!==200){
+      document.getElementById('status').textContent='失败';
+      appendLog('ERROR: '+(r.message||'unknown'));
+      return;
+    }
+    document.getElementById('status').textContent='已启动';
+    appendLog('taskId='+r.data.taskId);
+    appendLog('logFile='+r.data.logFile);
+    fetchTasks();
+  }catch(e){
+    document.getElementById('status').textContent='异常';
     appendLog('EXCEPTION: '+e);
   }
 });
