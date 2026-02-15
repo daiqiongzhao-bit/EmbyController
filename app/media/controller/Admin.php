@@ -1269,4 +1269,140 @@ class Admin extends BaseController
             ]
         ]);
     }
+
+
+    public function strm()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return redirect((string) url('/media/user/index'));
+        }
+
+        // defaults
+        $defaultSrc = '/opt/embycontroller/test-media';
+        $defaultOut = '/opt/embycontroller/strm-out';
+        $defaultExts = 'mkv,mp4,avi,mov,m4v';
+
+        try {
+            $cfg = new SysConfigModel();
+            $srcRow = $cfg->where('appName','strm')->where('key','src_dir')->find();
+            $outRow = $cfg->where('appName','strm')->where('key','out_dir')->find();
+            $extRow = $cfg->where('appName','strm')->where('key','exts')->find();
+            if ($srcRow && $srcRow['value']) $defaultSrc = $srcRow['value'];
+            if ($outRow && $outRow['value']) $defaultOut = $outRow['value'];
+            if ($extRow && $extRow['value']) $defaultExts = $extRow['value'];
+        } catch (\Throwable $e) {
+        }
+
+        View::assign('defaultSrc', $defaultSrc);
+        View::assign('defaultOut', $defaultOut);
+        View::assign('defaultExts', $defaultExts);
+        return view();
+    }
+
+    public function strmGenerate()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return json(['code' => 403, 'message' => '无权限']);
+        }
+        if (!Request::isPost()) {
+            return json(['code' => 405, 'message' => 'Method Not Allowed']);
+        }
+
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+
+        $srcDir = trim((string)($payload['srcDir'] ?? ''));
+        $outDir = trim((string)($payload['outDir'] ?? ''));
+        $exts = trim((string)($payload['exts'] ?? ''));
+        $overwrite = (bool)($payload['overwrite'] ?? false);
+        $saveCfg = (bool)($payload['saveCfg'] ?? true);
+
+        if ($srcDir === '' || $outDir === '') {
+            return json(['code' => 400, 'message' => 'srcDir/outDir 不能为空']);
+        }
+        if (!is_dir($srcDir)) {
+            return json(['code' => 400, 'message' => '源目录不存在: '.$srcDir]);
+        }
+        if (!is_dir($outDir)) {
+            if (!@mkdir($outDir, 0755, true)) {
+                return json(['code' => 500, 'message' => '无法创建输出目录: '.$outDir]);
+            }
+        }
+
+        $extList = [];
+        foreach (explode(',', $exts ?: 'mkv,mp4,avi,mov,m4v') as $e) {
+            $e = strtolower(trim($e));
+            if ($e !== '') $extList[] = $e;
+        }
+        if (!$extList) $extList = ['mkv','mp4','avi','mov','m4v'];
+
+        $t0 = microtime(true);
+        $countStrm = 0;
+        $countSkip = 0;
+
+        // determine base url from current request
+        $base = rtrim(Request::domain(), '/');
+        $playPrefix = $base . '/media/strm/play?path=';
+
+        $srcRootReal = realpath($srcDir);
+        if ($srcRootReal === false) {
+            return json(['code' => 500, 'message' => '无法解析源目录']);
+        }
+
+        $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($srcRootReal, \FilesystemIterator::SKIP_DOTS));
+        foreach ($rii as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile()) continue;
+            $ext = strtolower($file->getExtension());
+            if (!in_array($ext, $extList, true)) continue;
+
+            $absPath = $file->getRealPath();
+            if (!$absPath) continue;
+
+            $rel = ltrim(str_replace($srcRootReal, '', $absPath), DIRECTORY_SEPARATOR);
+            $outPath = rtrim($outDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . preg_replace('/\.[^.]+$/', '', $rel) . '.strm';
+
+            $outDirPath = dirname($outPath);
+            if (!is_dir($outDirPath)) {
+                @mkdir($outDirPath, 0755, true);
+            }
+
+            if (is_file($outPath) && !$overwrite) {
+                $countSkip++;
+                continue;
+            }
+
+            $url = $playPrefix . rawurlencode($absPath);
+            if (@file_put_contents($outPath, $url) === false) {
+                // skip write failure
+                $countSkip++;
+                continue;
+            }
+            $countStrm++;
+        }
+
+        if ($saveCfg) {
+            try {
+                $cfg = new SysConfigModel();
+                $upsert = function($key, $val) use ($cfg) {
+                    $row = $cfg->where('appName','strm')->where('key',$key)->find();
+                    if ($row) {
+                        $cfg->where('id', $row['id'])->update(['value' => $val]);
+                    } else {
+                        $cfg->save(['appName'=>'strm','key'=>$key,'value'=>$val,'type'=>0,'status'=>1]);
+                    }
+                };
+                $upsert('src_dir', $srcDir);
+                $upsert('out_dir', $outDir);
+                $upsert('exts', $exts);
+                // allowed roots (newline list)
+                $upsert('allowed_roots', $srcDir . "\n");
+            } catch (\Throwable $e) {
+            }
+        }
+
+        $costMs = (int)round((microtime(true) - $t0) * 1000);
+        return json(['code' => 200, 'data' => ['countStrm' => $countStrm, 'countSkip' => $countSkip, 'costMs' => $costMs]]);
+    }
+
 }

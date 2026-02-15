@@ -1,0 +1,111 @@
+{include file="public/_header" /}
+{include file="public/_aside" /}
+
+<div class="flex-1 p-6">
+  <div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">STRM 生成器</h1>
+    </div>
+
+    <div class="bg-white/5 rounded-xl p-6 space-y-4">
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">源目录（CloudDrive2 挂载路径 / 本地测试目录）</label>
+        <input id="srcDir" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="/opt/embycontroller/test-media" value="{$defaultSrc|default=''}" />
+        <p class="text-xs text-gray-400 mt-1">支持递归扫描。建议先放几段测试视频文件。</p>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">输出目录（生成 .strm 的位置）</label>
+        <input id="outDir" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="/opt/embycontroller/strm-out" value="{$defaultOut|default=''}" />
+        <p class="text-xs text-gray-400 mt-1">Emby 媒体库建议直接指向这个目录。</p>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">后缀（逗号分隔）</label>
+        <input id="exts" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="mkv,mp4,avi" value="{$defaultExts|default='mkv,mp4,avi,mov,m4v'}" />
+      </div>
+
+      <div class="flex items-center gap-4">
+        <label class="flex items-center gap-2">
+          <input id="overwrite" type="checkbox" class="accent-blue-500" />
+          <span class="text-sm text-gray-300">覆盖已存在的 .strm</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input id="saveCfg" type="checkbox" class="accent-blue-500" checked />
+          <span class="text-sm text-gray-300">保存配置（下次默认填充）</span>
+        </label>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button id="btnGen" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 transition">开始生成</button>
+        <button id="btnHealth" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">测试播放接口</button>
+        <span id="status" class="text-sm text-gray-300"></span>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">日志</label>
+        <pre id="log" class="w-full min-h-[180px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
+      </div>
+    </div>
+
+    <div class="text-xs text-gray-400 mt-4">
+      <p>说明：</p>
+      <ul class="list-disc pl-5 space-y-1 mt-1">
+        <li>.strm 内容会指向本站点的 <code>/media/strm/play?path=...</code>，Emby 播放时由本系统读取本地文件并支持 Range。</li>
+        <li>安全限制：只允许读取你在本页面保存过的源目录（以及你显式配置的允许路径）。</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function appendLog(s){
+  const el=document.getElementById('log');
+  el.textContent += (s + "\n");
+  el.scrollTop = el.scrollHeight;
+}
+
+async function postJson(url, data){
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  return await res.json();
+}
+
+document.getElementById('btnGen').addEventListener('click', async ()=>{
+  const srcDir=document.getElementById('srcDir').value.trim();
+  const outDir=document.getElementById('outDir').value.trim();
+  const exts=document.getElementById('exts').value.trim();
+  const overwrite=document.getElementById('overwrite').checked;
+  const saveCfg=document.getElementById('saveCfg').checked;
+  document.getElementById('status').textContent='执行中...';
+  document.getElementById('log').textContent='';
+  appendLog('开始生成...');
+  try{
+    const r = await postJson('/media/admin/strmGenerate', {srcDir,outDir,exts,overwrite,saveCfg});
+    if(r.code!==200){
+      document.getElementById('status').textContent='失败';
+      appendLog('ERROR: '+(r.message||'unknown'));
+      return;
+    }
+    document.getElementById('status').textContent='完成';
+    appendLog('完成。生成文件数: '+r.data.countStrm);
+    appendLog('跳过文件数: '+r.data.countSkip);
+    appendLog('耗时(ms): '+r.data.costMs);
+  }catch(e){
+    document.getElementById('status').textContent='异常';
+    appendLog('EXCEPTION: '+e);
+  }
+});
+
+document.getElementById('btnHealth').addEventListener('click', async ()=>{
+  appendLog('测试：/media/strm/play (Range) ...');
+  const res = await fetch('/media/strm/play?path=/__not_exist__', {headers:{'Range':'bytes=0-1'}});
+  appendLog('返回HTTP: '+res.status+' (预期 403/404 都正常)');
+});
+</script>
+
+{include file="public/_footer" /}
