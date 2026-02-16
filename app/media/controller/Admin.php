@@ -2079,7 +2079,15 @@ private function strm115_session_dir()
         // Build qr png base64 to avoid cookie issues on mobile browsers
         $qrPngB64 = '';
         try {
-            $qrObj = \Endroid\QrCode\QrCode::create($sess['qrcode'])->setSize(260);
+            $qrObj = null;
+            if (method_exists('Endroid\\QrCode\\QrCode', 'create')) {
+                $qrObj = \Endroid\QrCode\QrCode::create($sess['qrcode']);
+            } else {
+                $qrObj = new \Endroid\QrCode\QrCode($sess['qrcode']);
+            }
+            if (method_exists($qrObj, 'setSize')) {
+                $qrObj->setSize(260);
+            }
             $writer = new \Endroid\QrCode\Writer\PngWriter();
             $qrPngB64 = base64_encode($writer->write($qrObj)->getString());
         } catch (\Throwable $e) {
@@ -2114,7 +2122,15 @@ return json(['code' => 200, 'data' => [
 
         // Generate PNG QR code locally (endroid/qr-code)
         try {
-            $qr = \Endroid\QrCode\QrCode::create($data)->setSize(260);
+            $qr = null;
+            if (method_exists('Endroid\\QrCode\\QrCode', 'create')) {
+                $qr = \Endroid\QrCode\QrCode::create($data);
+            } else {
+                $qr = new \Endroid\QrCode\QrCode($data);
+            }
+            if (method_exists($qr, 'setSize')) {
+                $qr->setSize(260);
+            }
             $writer = new \Endroid\QrCode\Writer\PngWriter();
             $result = $writer->write($qr);
             return response($result->getString(), 200, ['Content-Type' => 'image/png']);
