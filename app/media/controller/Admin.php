@@ -2079,21 +2079,23 @@ private function strm115_session_dir()
         // Build qr png base64 to avoid cookie issues on mobile browsers
         $qrPngB64 = '';
         try {
-            $qrObj = null;
-            if (method_exists('Endroid\\QrCode\\QrCode', 'create')) {
-                $qrObj = \Endroid\QrCode\QrCode::create($sess['qrcode']);
-            } else {
-                $qrObj = new \Endroid\QrCode\QrCode($sess['qrcode']);
-            }
-            if (method_exists($qrObj, 'setSize')) {
-                $qrObj->setSize(260);
-            }
             $writer = new \Endroid\QrCode\Writer\PngWriter();
-            $qrPngB64 = base64_encode($writer->write($qrObj)->getString());
+            $qrCode = new \Endroid\QrCode\QrCode(
+                data: (string)$sess['qrcode'],
+                encoding: new \Endroid\QrCode\Encoding\Encoding('UTF-8'),
+                errorCorrectionLevel: \Endroid\QrCode\ErrorCorrectionLevel::Low,
+                size: 260,
+                margin: 10,
+                roundBlockSizeMode: \Endroid\QrCode\RoundBlockSizeMode::Margin,
+                foregroundColor: new \Endroid\QrCode\Color\Color(0, 0, 0),
+                backgroundColor: new \Endroid\QrCode\Color\Color(255, 255, 255)
+            );
+            $png = $writer->write($qrCode)->getString();
+            $qrPngB64 = base64_encode($png);
         } catch (\Throwable $e) {
             // ignore; client can still use qr_code_data
         }
-return json(['code' => 200, 'data' => [
+        return json(['code' => 200, 'data' => [
             'session_id' => $sessionId,
             'qr_code_data' => $sess['qrcode'],
             'qr_png_base64' => $qrPngB64,
@@ -2122,18 +2124,23 @@ return json(['code' => 200, 'data' => [
 
         // Generate PNG QR code locally (endroid/qr-code)
         try {
-            $qr = null;
-            if (method_exists('Endroid\\QrCode\\QrCode', 'create')) {
-                $qr = \Endroid\QrCode\QrCode::create($data);
-            } else {
-                $qr = new \Endroid\QrCode\QrCode($data);
-            }
-            if (method_exists($qr, 'setSize')) {
-                $qr->setSize(260);
-            }
             $writer = new \Endroid\QrCode\Writer\PngWriter();
-            $result = $writer->write($qr);
-            return response($result->getString(), 200, ['Content-Type' => 'image/png']);
+            $qrCode = new \Endroid\QrCode\QrCode(
+                data: (string)$data,
+                encoding: new \Endroid\QrCode\Encoding\Encoding('UTF-8'),
+                errorCorrectionLevel: \Endroid\QrCode\ErrorCorrectionLevel::Low,
+                size: 260,
+                margin: 10,
+                roundBlockSizeMode: \Endroid\QrCode\RoundBlockSizeMode::Margin,
+                foregroundColor: new \Endroid\QrCode\Color\Color(0, 0, 0),
+                backgroundColor: new \Endroid\QrCode\Color\Color(255, 255, 255)
+            );
+            $result = $writer->write($qrCode);
+            return response($result->getString(), 200)->header([
+                'Content-Type' => $result->getMimeType(),
+                'Cache-Control' => 'no-store',
+            ]);
+        }
         } catch (\Throwable $e) {
             return response('qr error: ' . $e->getMessage(), 500);
         }
