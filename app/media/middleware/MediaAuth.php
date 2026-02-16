@@ -52,6 +52,8 @@ class MediaAuth
             '/media/index/getLatestMedia',
             '/media/server/crontab',
             '/media/server/resolvePayment',
+            // STRM / 115 playback redirect is protected by its own token, should not require login cookie
+            '/media/strm115/redirect',
         ];
 
         $flag = false;
