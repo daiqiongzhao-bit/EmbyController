@@ -101,7 +101,8 @@ async function postJson(url, data){
 
 // ----- browser state -----
 let _115_items = [];
-let _115_nav = []; // breadcrumb stack: [{cid,name}]
+let _115_nav = []; // breadcrumb stack: [{cid,alt,name}]
+let _115_lastSig = "";
 
 function setCrumb115(){
   const el=document.getElementById('crumb');
@@ -184,7 +185,32 @@ async function load115List(){
   document.getElementById('listSummary').textContent = `共 ${_115_items.length} 项（文件夹 ${dirs}，文件 ${files}）`;
 
   render115List();
+  updateSig115();
   setCrumb115();
+}
+
+function updateSig115(){
+  try{
+    _115_lastSig = _115_items.map(x=>`${x.isDir?"d":"f"}:${x.fileId}:${x.cid}:${x.name}`).join("|");
+  }catch(e){_115_lastSig="";}
+}
+
+async function enterDir115(it){
+  const prevSig = _115_lastSig;
+  const primary = (it.cid||it.fileId);
+  const alt = (it.fileId||it.cid);
+  // try primary
+  _115_nav.push({cid:String(primary), alt:String(alt||""), name:String(it.name||primary)});
+  document.getElementById('cid').value = String(primary);
+  document.getElementById('offset').value = "0";
+  await load115List();
+  if (alt && alt !== primary && _115_lastSig === prevSig) {
+    // fallback to alt id
+    _115_nav[_115_nav.length-1].cid = String(alt);
+    document.getElementById('cid').value = String(alt);
+    document.getElementById('offset').value = "0";
+    await load115List();
+  }
 }
 
 function render115List(){
@@ -210,10 +236,10 @@ function render115List(){
       <button class="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入" data-cid="${escapeHtml(it.cid||it.fileId)}">进入</button>
       <span class="text-gray-400">📁</span>
       <span class="text-sm text-gray-200 truncate" style="max-width:620px">${escapeHtml(it.name)}</span>
-      <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}</span>
+      <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}  fid=${escapeHtml(it.fileId)}</span>
     `);
-    row.querySelector('button').addEventListener('click', ()=>navTo115(it.cid||it.fileId, it.name));
-    row.addEventListener('dblclick', ()=>navTo115(it.cid||it.fileId, it.name));
+    row.querySelector('button').addEventListener('click', ()=>enterDir115(it));
+    row.addEventListener('dblclick', ()=>enterDir115(it));
     box.appendChild(row);
   }
 
