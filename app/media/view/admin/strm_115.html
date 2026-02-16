@@ -375,11 +375,11 @@ function render115List(){
       <button class="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入" data-cid="${escapeHtml(it.fileId)}">进入</button>
       <span class="text-gray-400">📁</span>
       <span class="text-sm text-gray-200 truncate" style="max-width:520px">${escapeHtml(it.name)}</span>
-      <span class="text-[11px] text-gray-600 ml-auto">${escapeHtml(it.fileId)}</span>
+      <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}</span>
     `);
-    row.querySelector('button').addEventListener('click', ()=>navTo115(it.fileId, it.name));
+    row.querySelector('button').addEventListener('click', ()=>navTo115(it.cid||it.fileId, it.name));
     // click anywhere on row (except button) also navigates
-    row.addEventListener('dblclick', ()=>navTo115(it.fileId, it.name));
+    row.addEventListener('dblclick', ()=>navTo115(it.cid||it.fileId, it.name));
     box.appendChild(row);
   }
 
@@ -394,7 +394,7 @@ function render115List(){
       <input class="accent-blue-500" type="checkbox" data-fileid="${escapeHtml(it.fileId)}" data-name="${escapeHtml(it.name)}" />
       <span class="text-gray-400">🎬</span>
       <span class="text-sm text-gray-200 truncate" style="max-width:560px">${escapeHtml(it.name)}</span>
-      <span class="text-[11px] text-gray-600 ml-auto">${escapeHtml(it.fileId)}</span>
+      <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}</span>
     `);
     box.appendChild(row);
   }
