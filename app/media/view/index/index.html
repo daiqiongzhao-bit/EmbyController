@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>影视管理站-<?php echo config('app.app_name'); ?></title>
-    <meta name="description" content="专业的影视管理平台" />
+    <title><?php echo htmlspecialchars((($home['home_brand_prefix'] ?? '') !== '' ? $home['home_brand_prefix'] : '影视管理站-') . config('app.app_name')); ?></title>
+    <meta name="description" content="<?php echo htmlspecialchars(($home['home_meta_desc'] ?? '') !== '' ? $home['home_meta_desc'] : '专业的影视管理平台'); ?>" />
     <meta name="author" content="" />
     <script src="/assets/index/js/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -79,7 +79,7 @@
     <!-- 导航栏 -->
     <nav class="fixed top-0 z-50 w-full px-4 md:px-6 py-4">
         <div class="glass-effect rounded-full mx-auto max-w-7xl px-4 md:px-6 py-3 flex items-center justify-between">
-            <a href="/media" class="text-xl md:text-2xl font-bold">影视管理站-<?php echo config('app.app_name'); ?></a>
+            <a href="/media" class="text-xl md:text-2xl font-bold"><?php echo htmlspecialchars((($home['home_brand_prefix'] ?? '') !== '' ? $home['home_brand_prefix'] : '影视管理站-') . config('app.app_name')); ?></a>
             <!-- 移动端菜单按钮 -->
             <button id="menuButton" class="md:hidden p-2 glass-effect rounded-full">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -99,7 +99,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                     </svg>
-                    <span>回到控制台</span>
+                    <span><?php echo htmlspecialchars(($home['home_btn_logged_in'] ?? '') !== '' ? $home['home_btn_logged_in'] : '回到控制台'); ?></span>
                 </a>
                 {else}
                 <a href="/media/user/login" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
@@ -153,7 +153,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                         </svg>
-                        <span>回到控制台</span>
+                        <span><?php echo htmlspecialchars(($home['home_btn_logged_in'] ?? '') !== '' ? $home['home_btn_logged_in'] : '回到控制台'); ?></span>
                     </a>
                     {else}
                     <a href="/media/user/login" class="flex items-center space-x-2 hover:text-white/80 transition-colors">
@@ -198,10 +198,10 @@
             <!-- 顶部标题区域 -->
             <div class="absolute top-0 left-0 right-0 z-10 pt-24 md:pt-32 px-4 md:px-6 text-center md:text-left md:ml-40 lg:ml-64">
             <span class="inline-block glass-effect px-3 py-1 rounded-full text-sm mb-4">
-              欢迎来到<?php echo config('app.app_name'); ?>
+              <?php echo htmlspecialchars(($home['home_badge_text'] ?? '') !== '' ? $home['home_badge_text'] : ('欢迎来到' . config('app.app_name'))); ?>
             </span>
                 <h1 class="text-3xl md:text-5xl lg:text-6xl font-bold mb-4">
-                    专业的影视管理平台
+                    <?php echo htmlspecialchars(($home['home_hero_title'] ?? '') !== '' ? $home['home_hero_title'] : '专业的影视管理平台'); ?>
                 </h1>
             </div>
             <!-- 背景图片和渐变 -->
@@ -224,7 +224,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span>回到控制台</span>
+                        <span><?php echo htmlspecialchars(($home['home_btn_logged_in'] ?? '') !== '' ? $home['home_btn_logged_in'] : '回到控制台'); ?></span>
                     </button>
                     {else}
                     <button class="glass-effect w-full md:w-auto px-6 md:px-8 py-3 md:py-4 rounded-full flex items-center justify-center space-x-2 hover:bg-white/20 transition-all duration-300" onclick="window.location.href='/media/user/login'">
@@ -232,7 +232,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span>立即体验</span>
+                        <span><?php echo htmlspecialchars(($home['home_btn_logged_out'] ?? '') !== '' ? $home['home_btn_logged_out'] : '立即体验'); ?></span>
                     </button>
                     {/if}
                 </div>

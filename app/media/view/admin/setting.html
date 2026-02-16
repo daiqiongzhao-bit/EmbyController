@@ -6,6 +6,39 @@
         <h2 class="text-xl font-semibold">站点设置</h2>
         <div class="space-y-4">
             <div class="space-y-2">
+                <label class="block text-white-400 mb-1">首页文案（可自定义）</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">站点名前缀</label>
+                        <input type="text" name="home_brand_prefix" value="{$settings.home_brand_prefix|default='影视管理站-'}" class="w-full bg-white/10 rounded-lg px-4 py-2" />
+                        <p class="text-xs text-gray-400 mt-1">显示在浏览器标题/左上角，例如：影视管理站-</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">首页简介（Meta Description）</label>
+                        <input type="text" name="home_meta_desc" value="{$settings.home_meta_desc|default='专业的影视管理平台'}" class="w-full bg-white/10 rounded-lg px-4 py-2" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">首页徽标小字</label>
+                        <input type="text" name="home_badge_text" value="{$settings.home_badge_text|default=''}" class="w-full bg-white/10 rounded-lg px-4 py-2" placeholder="例如：欢迎来到照哥影视" />
+                        <p class="text-xs text-gray-400 mt-1">留空则自动显示：欢迎来到 + 站点名</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">首页主标题</label>
+                        <input type="text" name="home_hero_title" value="{$settings.home_hero_title|default='专业的影视管理平台'}" class="w-full bg-white/10 rounded-lg px-4 py-2" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">已登录按钮文案</label>
+                        <input type="text" name="home_btn_logged_in" value="{$settings.home_btn_logged_in|default='回到控制台'}" class="w-full bg-white/10 rounded-lg px-4 py-2" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">未登录按钮文案</label>
+                        <input type="text" name="home_btn_logged_out" value="{$settings.home_btn_logged_out|default='立即体验'}" class="w-full bg-white/10 rounded-lg px-4 py-2" />
+                    </div>
+                </div>
+                <p class="text-sm text-gray-400 mt-2">修改后点页面底部“保存设置”即可生效。</p>
+            </div>
+
+            <div class="space-y-2">
                 <label class="block text-white-400 mb-1">系统通知</label>
                 <textarea name="sysnotificiations"
                           rows="10"

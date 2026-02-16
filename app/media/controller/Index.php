@@ -12,6 +12,7 @@ use app\media\model\UserModel as UserModel;
 use think\facade\View;
 use think\facade\Config;
 use think\facade\Cache;
+use app\media\model\SysConfigModel;
 
 class Index extends BaseController
 {
@@ -58,6 +59,27 @@ class Index extends BaseController
                 $latestMediaComment[$key]['mentions'] = $mentionsUser;
             }
         }
+        // 首页文案（可在“系统设置”里修改）
+        try {
+            $cfg = new SysConfigModel();
+            $keys = [
+                'home_brand_prefix',
+                'home_meta_desc',
+                'home_badge_text',
+                'home_hero_title',
+                'home_btn_logged_in',
+                'home_btn_logged_out',
+            ];
+            $rows = $cfg->whereIn('key', $keys)->select();
+            $home = [];
+            foreach ($rows as $r) {
+                $home[$r['key']] = (string)($r['value'] ?? '');
+            }
+            View::assign('home', $home);
+        } catch (\Throwable $e) {
+            View::assign('home', []);
+        }
+
         View::assign('allRegisterUserCount', $allRegisterUserCount);
         View::assign('activateRegisterUserCount', $activateRegisterUserCount);
         View::assign('deactivateRegisterUserCount', $deactivateRegisterUserCount);
