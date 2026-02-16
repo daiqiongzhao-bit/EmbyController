@@ -1932,6 +1932,56 @@ public function strmTaskStart()
 
     
 
+
+
+    private function strm115_cfg_get($key, $default = '')
+    {
+        try {
+            $m = new SysConfigModel();
+            $row = $m->where('appName', 'strm115')->where('key', $key)->find();
+            if ($row && isset($row['value']) && $row['value'] !== '') {
+                return (string)$row['value'];
+            }
+        } catch (\Throwable $e) {
+        }
+        return $default;
+    }
+
+    private function strm115_open_get($path, array $qs = [], $timeoutSec = 20)
+    {
+        $token = $this->strm115_cfg_get('b2_access_token', '');
+        if ($token === '') {
+            return [false, 0, null, 'missing token'];
+        }
+        $base = rtrim($this->strm115_cfg_get('openapi_base', 'https://proapi.115.com'), '/');
+        $url = $base . $path;
+        if ($qs) {
+            $url .= (strpos($url, '?') !== false ? '&' : '?') . http_build_query($qs);
+        }
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSec);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'accept: application/json',
+            'authorization: Bearer ' . $token,
+            'user-agent: Mozilla/5.0',
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $resp = curl_exec($ch);
+        if ($resp === false) {
+            $err = curl_error($ch);
+            curl_close($ch);
+            return [false, 0, null, 'curl_error: ' . $err];
+        }
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $json = json_decode($resp, true);
+        return [true, $code, $json, $resp];
+    }
     private function strm115_cfg_upsert($appName, $key, $value)
     {
         $m = new \app\media\model\SysConfigModel();
@@ -2252,6 +2302,104 @@ private function strm115_session_dir()
             'expires_in' => $expiresIn,
             'expires_at' => $expiresAt,
         ]]);
+    }
+
+
+    // GET /media/admin/strm115B2List?cid=0&offset=0&limit=200
+    public function strm115B2List()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $cid = (string)input('cid', '0');
+        $offset = (int)input('offset', 0);
+        $limit = (int)input('limit', 200);
+        if ($limit <= 0) $limit = 200;
+        if ($limit > 500) $limit = 500;
+
+        [$ok, $http, $j, $raw] = $this->strm115_open_get('/open/ufile/files', [
+            'cid' => $cid,
+            'offset' => $offset,
+            'limit' => $limit,
+            'show_dir' => 1,
+            'stdir' => 1,
+            'natsort' => 1,
+        ], 25);
+        if (!$ok) {
+            return json(['code' => 500, 'message' => '115请求失败：' . $raw]);
+        }
+        return json(['code' => 200, 'data' => $j, 'http' => $http]);
+    }
+
+    // POST /media/admin/strm115GenStrm
+    // body: { outDir, baseUrl, items:[{fileId,name}], mode:"url"|"kv" }
+    public function strm115GenStrm()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        if (!Request::isPost()) {
+            return json(['code' => 405, 'message' => 'Method Not Allowed']);
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+
+        $outDir = trim((string)($payload['outDir'] ?? ''));
+        $baseUrl = trim((string)($payload['baseUrl'] ?? ''));
+        $items = $payload['items'] ?? [];
+        $mode = (string)($payload['mode'] ?? 'url'); // url|kv
+
+        if ($outDir === '' || $baseUrl === '') {
+            return json(['code' => 400, 'message' => 'outDir/baseUrl 不能为空']);
+        }
+        if (!is_dir($outDir)) {
+            if (!@mkdir($outDir, 0755, true)) {
+                return json(['code' => 500, 'message' => '无法创建输出目录: ' . $outDir]);
+            }
+        }
+        if (!is_array($items) || !$items) {
+            return json(['code' => 400, 'message' => 'items 不能为空']);
+        }
+
+        // secret for redirect
+        $secret = $this->strm115_cfg_get('play_secret', '');
+        if ($secret === '') {
+            $secret = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
+            $this->strm115_cfg_upsert('strm115', 'play_secret', $secret);
+        }
+
+        $base = rtrim($baseUrl, '/');
+        $count = 0;
+        $written = [];
+
+        foreach ($items as $it) {
+            if (!is_array($it)) continue;
+            $fileId = (string)($it['fileId'] ?? '');
+            $name = (string)($it['name'] ?? $fileId);
+            if ($fileId === '') continue;
+
+            $safeName = preg_replace('/[\\\/\:\*\?\"\<\>\|]+/', '_', $name);
+            $safeName = trim($safeName);
+            if ($safeName === '') $safeName = $fileId;
+            if (!preg_match('/\.strm$/i', $safeName)) {
+                $safeName .= '.strm';
+            }
+            $outPath = rtrim($outDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $safeName;
+
+            if ($mode === 'kv') {
+                $content = 'provider=115,fileId=' . $fileId;
+            } else {
+                $content = $base . '/media/strm115/redirect?fileId=' . rawurlencode($fileId) . '&token=' . rawurlencode($secret);
+            }
+
+            if (@file_put_contents($outPath, $content) === false) {
+                continue;
+            }
+            $count++;
+            $written[] = $outPath;
+        }
+
+        return json(['code' => 200, 'data' => ['count' => $count, 'written' => $written, 'play_secret' => $secret]]);
     }
 
 }
