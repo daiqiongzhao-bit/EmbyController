@@ -17,6 +17,10 @@
     </div>
 
     <div class="bg-white/5 rounded-xl p-5">
+      <div class="hidden md:flex items-center gap-2 mb-3">
+        <button class="px-4 py-2 rounded bg-green-700 hover:bg-green-600" onclick="genSelectedFolders()">对选中目录递归生成</button>
+        <span class="text-xs text-gray-500">（电脑端：可勾选多个目录一键生成）</span>
+      </div>
       <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div>
           <label class="block text-sm text-gray-300 mb-1">rootCid（限制生成/播放范围，可选）</label>
@@ -236,6 +240,7 @@ function render115List(){
 
   for (const it of dirs) {
     const row = mkRow(`
+      <input class="hidden md:block accent-blue-500" type="checkbox" data-dirsel="1" data-cid="${escapeHtml(it.cid||it.fileId)}" data-name="${escapeHtml(it.name)}" />
       <button class="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入" data-cid="${escapeHtml(it.cid||it.fileId)}">进入</button>
       <button class="text-xs px-2 py-1 rounded bg-green-700/70 hover:bg-green-600 border border-white/10" title="递归生成" data-gen="1">递归生成</button>
       <span class="text-gray-400">📁</span>
@@ -314,6 +319,34 @@ function toggleAdvanced(){
   const el=document.getElementById('advBox');
   if(!el) return;
   el.classList.toggle('hidden');
+}
+
+async function genSelectedFolders(){
+  const outDir = document.getElementById('outDir115').value.trim();
+  const baseUrl = document.getElementById('baseUrl115').value.trim();
+  const mode = document.getElementById('mode115').value;
+  const rootCid = document.getElementById('rootCid115').value.trim();
+  if (!outDir || !baseUrl) {
+    document.getElementById('genSummary').textContent = "outDir/baseUrl 不能为空";
+    return;
+  }
+  const box=document.getElementById('fileList');
+  const folders=[];
+  box.querySelectorAll('input[data-dirsel="1"]:checked').forEach(cb=>{
+    folders.push({cid: cb.getAttribute('data-cid'), name: cb.getAttribute('data-name')});
+  });
+  if(!folders.length){
+    document.getElementById('genSummary').textContent = "请先勾选目录";
+    return;
+  }
+  document.getElementById('genSummary').textContent = "递归生成中...";
+  const r = await postJson('/media/admin/strm115GenStrmFromFolders', {folders, outDir, baseUrl, mode, rootCid, recursive:1, maxDepth:8, maxFiles:5000});
+  appendLog('genFolders: ' + JSON.stringify(r).slice(0,2000));
+  if(!r || r.code!==200){
+    document.getElementById('genSummary').textContent = "生成失败："+(r.message||'');
+    return;
+  }
+  document.getElementById('genSummary').textContent = `已生成 ${r.data.count} 个（遍历目录 ${r.data.dirsVisited}）`;
 }
 
 async function genFolder115(it){

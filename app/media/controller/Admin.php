@@ -2627,113 +2627,26 @@ $base = rtrim($baseUrl, '/');
         $recursive = (int)($payload['recursive'] ?? 1);
         $maxDepth = (int)($payload['maxDepth'] ?? 6);
         $maxFiles = (int)($payload['maxFiles'] ?? 3000);
-        if ($maxDepth <= 0) $maxDepth = 6;
-        if ($maxDepth > 12) $maxDepth = 12;
-        if ($maxFiles <= 0) $maxFiles = 3000;
-        if ($maxFiles > 20000) $maxFiles = 20000;
+        $folderName = trim((string)($payload['folderName'] ?? $cid));
 
         if ($cid === '' || $outDir === '' || $baseUrl === '') {
             return json(['code' => 400, 'message' => 'cid/outDir/baseUrl 不能为空']);
         }
 
-        // init outDir
         if (!is_dir($outDir)) {
             if (!@mkdir($outDir, 0755, true)) {
                 return json(['code' => 500, 'message' => '无法创建输出目录: ' . $outDir]);
             }
         }
 
-        // secret for redirect
-        $secret = $this->strm115_cfg_get('play_secret', '');
-        if ($secret === '') {
-            $secret = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
-            $this->strm115_cfg_upsert('strm115', 'play_secret', $secret);
-        }
-
-        // allowlist
-        $allowDir = $this->strm115_cfg_get('allowlist_dir', '/app/runtime/media/strm115');
-        if (!is_dir($allowDir)) { @mkdir($allowDir, 0755, true); }
-        $allowPath = rtrim($allowDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'allowlist.json';
-        $allow = [];
-        if (is_file($allowPath)) { $tmp = json_decode(@file_get_contents($allowPath), true); if (is_array($tmp)) $allow = $tmp; }
-        if (!isset($allow['roots']) || !is_array($allow['roots'])) $allow['roots'] = [];
-        if ($rootCid !== '') {
-            $allow['root_cid'] = $rootCid;
-            if (!isset($allow['roots'][$rootCid]) || !is_array($allow['roots'][$rootCid])) $allow['roots'][$rootCid] = [];
-        }
-
-        $base = rtrim($baseUrl, '/');
-
-        // BFS traversal
-        $queue = [[(string)$cid, 0]];
-        $seen = [];
-        $files = [];
-        $dirsVisited = 0;
-
-        while ($queue) {
-            [$curCid, $depth] = array_shift($queue);
-            if (isset($seen[$curCid])) continue;
-            $seen[$curCid] = 1;
-            $dirsVisited++;
-
-            // fetch list (page through offsets)
-            $offset = 0;
-            $pageSize = 500;
-            while (true) {
-                [$ok, $http, $j, $raw] = $this->strm115_open_get('/open/ufile/files', [
-                    'cid' => $curCid,
-                    'offset' => $offset,
-                    'limit' => $pageSize,
-                    'show_dir' => 1,
-                    'stdir' => 1,
-                    'natsort' => 1,
-                ], 25);
-                if (!$ok) {
-                    break;
-                }
-
-                $arr = [];
-                if (is_array($j)) {
-                    if (isset($j['data']['data']) && is_array($j['data']['data'])) $arr = $j['data']['data'];
-                    else if (isset($j['data']) && is_array($j['data'])) {
-                        if (isset($j['data']['files']) && is_array($j['data']['files'])) $arr = $j['data']['files'];
-                        else if (isset($j['data']['list']) && is_array($j['data']['list'])) $arr = $j['data']['list'];
-                    }
-                }
-
-                $got = 0;
-                foreach ($arr as $it) {
-                    if (!is_array($it)) continue;
-                    $fid = (string)($it['file_id'] ?? $it['fid'] ?? '');
-                    $name = (string)($it['file_name'] ?? $it['fn'] ?? $fid);
-                    $fc = $it['fc'] ?? ($it['file_category'] ?? null);
-                    $isDir = (isset($it['is_dir']) && ((string)$it['is_dir'] === '1')) || ($fc !== null && (string)$fc === '0');
-                    if ($isDir) {
-                        if ($recursive && $depth < $maxDepth) {
-                            if ($fid !== '' && !isset($seen[$fid])) {
-                                $queue[] = [$fid, $depth + 1];
-                            }
-                        }
-                    } else {
-                        if ($fid !== '') {
-                            $files[] = ['fileId' => $fid, 'name' => $name];
-                            if (count($files) >= $maxFiles) break 2;
-                        }
-                    }
-                    $got++;
-                }
-
-                if ($got < $pageSize) {
-                    break;
-                }
-                $offset += $pageSize;
-                if ($offset > 200000) break;
-            }
-        }
-
-        if (!$files) {
-            return json(['code' => 200, 'data' => ['count' => 0, 'written' => [], 'message' => '未发现文件（可能只有目录/或无权限）', 'dirsVisited' => $dirsVisited]]);
-        }
+        $r = $this->strm115GenStrmFromFolder_impl($cid, $folderName, $outDir, $baseUrl, $mode, $rootCid, $recursive, $maxDepth, $maxFiles);
+        return json(['code'=>200,'data'=>[
+            'count'=>$r['count'],
+            'written'=>$r['written'],
+            'dirsVisited'=>$r['dirsVisited'],
+            'subtitleDownloaded'=>$r['subtitleDownloaded'],
+        ]]);
+    }
 
         // generate
         $count = 0;
@@ -2774,6 +2687,158 @@ $base = rtrim($baseUrl, '/');
             'maxFiles' => $maxFiles,
             'maxDepth' => $maxDepth,
         ]]);
+    }
+
+
+    private function strm115_filter_cfg()
+    {
+        $raw = $this->strm115_cfg_get('file_filter_json', '');
+        if ($raw === '') {
+            $raw = json_encode([
+                'include' => ['.mp4','.mkv','.avi','.m4v','.mov','.wmv','.flv','.mpg','.mpeg','.rm','.rmvb','.vob','.ts','.tp'],
+                'download' => ['ass','srt'],
+            ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        }
+        $j = json_decode($raw, true);
+        if (!is_array($j)) $j = [];
+        if (!isset($j['include']) || !is_array($j['include'])) $j['include'] = [];
+        if (!isset($j['download']) || !is_array($j['download'])) $j['download'] = [];
+        // normalize
+        $j['include'] = array_values(array_unique(array_map(function($x){
+            $x = strtolower(trim((string)$x));
+            if ($x !== '' && $x[0] !== '.') $x = '.' . $x;
+            return $x;
+        }, $j['include'])));
+        $j['download'] = array_values(array_unique(array_map(function($x){
+            return strtolower(trim((string)$x));
+        }, $j['download'])));
+        return $j;
+    }
+
+    private function strm115_download_to($fileId, $toPath)
+    {
+        // 1) resolve direct url
+        [$ok, $http, $j, $raw] = $this->strm115_open_get('/open/ufile/download', [
+            'file_id' => (string)$fileId,
+        ], 25);
+        if (!$ok) {
+            return [false, 'resolve_failed:' . $raw];
+        }
+        $direct = '';
+        if (is_array($j)) {
+            if (isset($j['data']['url'])) $direct = (string)$j['data']['url'];
+            if ($direct === '' && isset($j['data']['download_url'])) $direct = (string)$j['data']['download_url'];
+            if ($direct === '' && isset($j['data']['link'])) $direct = (string)$j['data']['link'];
+        }
+        if ($direct === '') {
+            return [false, 'no_direct_url'];
+        }
+
+        // 2) download
+        $dir = dirname($toPath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $fp = @fopen($toPath, 'wb');
+        if (!$fp) {
+            return [false, 'open_failed'];
+        }
+        $ch = curl_init($direct);
+        curl_setopt($ch, CURLOPT_FILE, $fp);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+        $ok2 = curl_exec($ch);
+        $err = $ok2 ? '' : curl_error($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        fclose($fp);
+        if (!$ok2 || $code >= 400) {
+            @unlink($toPath);
+            return [false, 'http:' . $code . ($err ? (':' . $err) : '')];
+        }
+        return [true, 'ok'];
+    }
+
+
+    // GET /media/admin/strm115FilterGet
+    public function strm115FilterGet()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $j = $this->strm115_filter_cfg();
+        return json(['code'=>200,'data'=>$j]);
+    }
+
+    // POST /media/admin/strm115FilterSave  body:{json}
+    public function strm115FilterSave()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        if (!Request::isPost()) {
+            return json(['code'=>405,'message'=>'Method Not Allowed']);
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+        $raw = (string)($payload['json'] ?? '');
+        $j = json_decode($raw, true);
+        if (!is_array($j)) {
+            return json(['code'=>400,'message'=>'json 解析失败']);
+        }
+        $this->strm115_cfg_upsert('strm115', 'file_filter_json', json_encode($j, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+        return json(['code'=>200,'data'=>$this->strm115_filter_cfg()]);
+    }
+
+
+    // POST /media/admin/strm115GenStrmFromFolders
+    // body: { folders:[{cid,name}], outDir, baseUrl, mode, rootCid(optional), recursive:1|0, maxDepth, maxFiles }
+    public function strm115GenStrmFromFolders()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        if (!Request::isPost()) {
+            return json(['code' => 405, 'message' => 'Method Not Allowed']);
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+        $folders = $payload['folders'] ?? [];
+        if (!is_array($folders) || !$folders) {
+            return json(['code'=>400,'message'=>'folders 不能为空']);
+        }
+        $outDir = trim((string)($payload['outDir'] ?? ''));
+        $baseUrl = trim((string)($payload['baseUrl'] ?? ''));
+        $mode = (string)($payload['mode'] ?? 'url');
+        $rootCid = trim((string)($payload['rootCid'] ?? ''));
+        $recursive = (int)($payload['recursive'] ?? 1);
+        $maxDepth = (int)($payload['maxDepth'] ?? 8);
+        $maxFiles = (int)($payload['maxFiles'] ?? 5000);
+
+        $total = 0;
+        $dirsVisited = 0;
+        $written = [];
+        foreach ($folders as $f) {
+            if (!is_array($f)) continue;
+            $cid = trim((string)($f['cid'] ?? ''));
+            $name = trim((string)($f['name'] ?? $cid));
+            if ($cid === '') continue;
+
+            // call single-folder generator but with folder base name
+            $r = $this->strm115GenStrmFromFolder_impl($cid, $name, $outDir, $baseUrl, $mode, $rootCid, $recursive, $maxDepth, $maxFiles);
+            if ($r['count'] > 0) {
+                $total += $r['count'];
+            }
+            $dirsVisited += (int)($r['dirsVisited'] ?? 0);
+            foreach (($r['written'] ?? []) as $x) {
+                if (count($written) < 50) $written[] = $x;
+            }
+        }
+        return json(['code'=>200,'data'=>['count'=>$total,'dirsVisited'=>$dirsVisited,'written'=>$written]]);
     }
 
 }
