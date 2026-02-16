@@ -93,6 +93,13 @@
         <?php $user=session('r_user'); ?>
         {if isset($user->authority) && $user->authority == 0}
         <div class="border-t border-white/10"></div>
+        <a href="/media/admin/cloudStorage" class="flex items-center space-x-2 p-2 rounded-lg hover:bg-white/10 transition-colors" onclick="startMainLoading();">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h11a4 4 0 000-8 5 5 0 00-9.9-1A4 4 0 003 15z" />
+            </svg>
+            <span>云存储管理</span>
+        </a>
+
         <a href="/media/admin/setting" class="flex items-center space-x-2 p-2 rounded-lg hover:bg-white/10 transition-colors" onclick="startMainLoading();">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a10 10 0 100 20 10 10 0 000-20zM12 6a6 6 0 100 12 6 6 0 000-12z" />
@@ -119,6 +126,13 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h18M3 12h18M3 19h18" />
             </svg>
             <span>115 目录浏览/生成</span>
+        </a>
+
+        <a href="/media/admin/strm115PickcodeCache" class="flex items-center space-x-2 p-2 rounded-lg hover:bg-white/10 transition-colors" onclick="startMainLoading();">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-4.418 0-8 1.79-8 4s3.582 4 8 4 8-1.79 8-4-3.582-4-8-4zm0 0V6m0 10v2" />
+            </svg>
+            <span>Pickcode 缓存管理</span>
         </a>
 
         <a href="/media/admin/strmEvents" class="flex items-center space-x-2 p-2 rounded-lg hover:bg-white/10 transition-colors" onclick="startMainLoading();">

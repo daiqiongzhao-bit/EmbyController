@@ -1,0 +1,85 @@
+{include file="public/_header" /}
+
+<div class="flex-1 p-6">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-2xl font-bold">Pickcode 缓存管理</h1>
+        <div class="text-xs text-gray-500 mt-1">版本：<?php echo env('APP_VERSION','unknown'); ?></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refresh()">刷新</button>
+        <button class="px-3 py-2 rounded bg-red-600/70 hover:bg-red-600 text-sm" onclick="clearAll()">清空所有缓存</button>
+      </div>
+    </div>
+
+    <div class="bg-white/5 rounded-xl p-5">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div class="bg-black/20 border border-white/10 rounded p-4">
+          <div class="text-xs text-gray-500">缓存数量</div>
+          <div class="text-2xl font-semibold mt-1" id="cnt">-</div>
+        </div>
+        <div class="md:col-span-3">
+          <label class="block text-sm text-gray-300 mb-1">搜索（文件ID / Pickcode）</label>
+          <div class="flex gap-2">
+            <input id="q" class="flex-1 px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如 2875... 或 abcdef..." />
+            <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" onclick="refresh()">查询</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-auto border border-white/10 rounded-lg bg-black/20">
+        <table class="w-full text-sm">
+          <thead class="text-xs text-gray-400 border-b border-white/10">
+            <tr>
+              <th class="text-left px-3 py-2">文件ID</th>
+              <th class="text-left px-3 py-2">Pickcode</th>
+              <th class="text-left px-3 py-2">更新时间</th>
+              <th class="text-left px-3 py-2">操作</th>
+            </tr>
+          </thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>
+
+      <div class="text-[11px] text-gray-500 mt-3">说明：这个缓存会在你浏览目录/生成 STRM 时逐步积累，用于后续优化播放跳转与接口调用。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function getJson(url){ const r=await fetch(url,{credentials:'include'}); return await r.json(); }
+async function postJson(url,data){ const r=await fetch(url,{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify(data||{})}); return await r.json(); }
+
+function esc(s){return String(s||'').replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+async function refresh(){
+  const q=document.getElementById('q').value.trim();
+  const j=await getJson('/media/admin/strm115PickcodeCacheList?q='+encodeURIComponent(q));
+  if(!j||j.code!==200){ return; }
+  document.getElementById('cnt').textContent = j.data.total;
+  const tb=document.getElementById('tb');
+  tb.innerHTML='';
+  (j.data.items||[]).forEach(it=>{
+    const tr=document.createElement('tr');
+    tr.className='border-b border-white/5';
+    tr.innerHTML=`
+      <td class="px-3 py-2 text-gray-200">${esc(it.fileId)}</td>
+      <td class="px-3 py-2 text-gray-200">${esc(it.pickcode)} <button class="text-xs text-blue-400 underline ml-2" data-copy="1">复制</button></td>
+      <td class="px-3 py-2 text-gray-400">${esc(it.updatedAt||'')}</td>
+      <td class="px-3 py-2"><button class="text-xs text-red-400 underline" data-del="1">删除</button></td>
+    `;
+    tr.querySelector('button[data-copy="1"]').addEventListener('click', ()=>navigator.clipboard.writeText(it.pickcode||''));
+    tr.querySelector('button[data-del="1"]').addEventListener('click', async ()=>{ await postJson('/media/admin/strm115PickcodeCacheDelete',{fileId:it.fileId}); await refresh(); });
+    tb.appendChild(tr);
+  });
+}
+async function clearAll(){
+  if(!confirm('确认清空全部 pickcode 缓存？')) return;
+  await postJson('/media/admin/strm115PickcodeCacheClear',{});
+  await refresh();
+}
+refresh();
+</script>
+
+{include file="public/_footer" /}

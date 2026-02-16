@@ -1,0 +1,180 @@
+{include file="public/_header" /}
+
+<div class="flex-1 p-6">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-2xl font-bold">云存储管理</h1>
+        <div class="text-xs text-gray-500 mt-1">版本：<?php echo env('APP_VERSION','unknown'); ?></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshStatus()">刷新状态</button>
+        <a class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" href="/media/admin/strm115Browser">目录浏览/生成STRM</a>
+      </div>
+    </div>
+
+    <div class="bg-white/5 rounded-xl p-5">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div class="bg-black/20 border border-white/10 rounded p-4">
+          <div class="text-xs text-gray-500">115 授权状态</div>
+          <div class="text-lg font-semibold mt-1" id="stAuth">-</div>
+          <div class="text-[11px] text-gray-500 mt-1" id="stExp">-</div>
+        </div>
+        <div class="bg-black/20 border border-white/10 rounded p-4">
+          <div class="text-xs text-gray-500">Access Token</div>
+          <div class="text-sm mt-1" id="stAccess">-</div>
+        </div>
+        <div class="bg-black/20 border border-white/10 rounded p-4">
+          <div class="text-xs text-gray-500">Refresh Token</div>
+          <div class="text-sm mt-1" id="stRefresh">-</div>
+        </div>
+        <div class="bg-black/20 border border-white/10 rounded p-4">
+          <div class="text-xs text-gray-500">播放安全</div>
+          <div class="text-sm mt-1" id="stSig">-</div>
+          <a class="text-xs text-blue-400 underline" href="/media/admin/strm115Security" target="_blank">打开安全配置</a>
+        </div>
+      </div>
+
+      <div class="border-t border-white/10 pt-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-semibold">115 网盘（扫码授权）</div>
+          <div class="text-xs text-gray-500">提示：选择常用 AppID 或手动输入 → 生成二维码 → 扫码确认 → 完成授权</div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-sm text-gray-300 mb-1">AppID / ClientID</label>
+            <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="可手动输入，例如 100195137" />
+            <div class="mt-2 flex flex-wrap gap-2" id="cidQuick"></div>
+            <p class="text-[11px] text-gray-500 mt-1">常用项点一下会自动填入；你也可以直接粘贴数字。</p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-300 mb-1">二维码</label>
+            <div class="flex items-center gap-3">
+              <img id="qrImg" class="w-[160px] h-[160px] bg-black/30 rounded border border-white/10" alt="qr" />
+              <div class="text-sm text-gray-300">
+                <div>状态：<span id="qrStatus">未生成</span></div>
+                <div class="text-[11px] text-gray-500 mt-2">session：<span id="qrSession">-</span></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-300 mb-1">操作</label>
+            <div class="flex flex-wrap gap-2">
+              <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" id="btnB2Gen">生成二维码</button>
+              <button class="px-4 py-2 rounded bg-green-600 hover:bg-green-500" id="btnB2Complete" disabled>完成授权</button>
+              <a class="px-4 py-2 rounded bg-white/10 hover:bg-white/20" href="/media/admin/strm115" target="_blank">更多配置</a>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-2">如果你扫码后这里一直不变，点一次“刷新状态”。</p>
+          </div>
+        </div>
+
+        <pre id="log" class="mt-4 w-full hidden min-h-[80px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
+        <button class="mt-2 text-xs text-blue-400 underline" onclick="toggleLog()">展开/收起日志</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleLog(){ document.getElementById('log').classList.toggle('hidden'); }
+function appendLog(s){ const el=document.getElementById('log'); el.textContent += (s+'\n'); el.scrollTop=el.scrollHeight; }
+async function postJson(url, data){
+  const res = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data||{})});
+  return await res.json();
+}
+async function getJson(url){ const res=await fetch(url); return await res.json(); }
+
+const commonClientIds = [
+  {id:'100195145', name:'Filebar'},
+  {id:'100195147', name:'cineultra'},
+  {id:'100195137', name:'VIDHUB'},
+  {id:'100195135', name:'网易爆米花'},
+  {id:'100196807', name:'MP2'},
+  {id:'100196809', name:'资源管理'},
+  {id:'100196811', name:'吾名冰河'},
+  {id:'100196813', name:'超级网盘助手'},
+  {id:'100196855', name:'飞牛'}
+];
+(function(){
+  const box=document.getElementById('cidQuick');
+  commonClientIds.forEach(x=>{
+    const b=document.createElement('button');
+    b.className='px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-xs';
+    b.textContent = x.name;
+    b.addEventListener('click', ()=>{ document.getElementById('b2ClientId').value=x.id; });
+    box.appendChild(b);
+  });
+})();
+
+async function refreshStatus(){
+  const j = await getJson('/media/admin/strm115Status');
+  if (!j || j.code!==200) return;
+  const d=j.data||{};
+  document.getElementById('stAuth').textContent = d.authorized ? '已授权' : '未授权';
+  document.getElementById('stExp').textContent = d.expires_at ? ('过期时间：'+d.expires_at) : '';
+  document.getElementById('stAccess').textContent = d.access_masked || '-';
+  document.getElementById('stRefresh').textContent = d.refresh_masked || '-';
+  document.getElementById('stSig').textContent = d.play_sig_enabled==='1' ? ('签名校验：开（TTL='+ (d.play_sig_ttl||'') +'秒）') : '签名校验：关';
+}
+
+let b2Timer=null; let b2SessionId='';
+function setQrStatus(t){ document.getElementById('qrStatus').textContent=t; }
+function stopPoll(){ if(b2Timer){ clearInterval(b2Timer); b2Timer=null; } }
+async function pollStatus(){
+  if(!b2SessionId) return;
+  const r=await getJson('/media/admin/strm115B2Status?session_id='+encodeURIComponent(b2SessionId)).catch(()=>null);
+  if(!r){ setQrStatus('异常'); return; }
+  appendLog('status: '+JSON.stringify(r));
+  if(r.code===200){
+    const st = (r.data && r.data.status!=null) ? r.data.status : null;
+    if(st===0) setQrStatus('等待扫码');
+    else if(st===1) setQrStatus('已扫码，待确认');
+    else if(st===2) setQrStatus('已确认，可完成授权');
+    else if(st===-2) { setQrStatus('已取消'); stopPoll(); }
+    else setQrStatus('未知');
+    if(st===2) document.getElementById('btnB2Complete').disabled=false;
+  } else {
+    setQrStatus('异常');
+  }
+}
+
+document.getElementById('btnB2Gen').addEventListener('click', async ()=>{
+  const clientId=document.getElementById('b2ClientId').value.trim();
+  if(!clientId){ alert('请先填写 AppID / ClientID'); return; }
+  document.getElementById('btnB2Complete').disabled=true;
+  stopPoll();
+  setQrStatus('生成中...');
+  const r=await postJson('/media/admin/strm115B2Qr', {client_id: clientId, name:'115'});
+  appendLog('gen: '+JSON.stringify(r));
+  if(r && r.code===200){
+    b2SessionId = r.data.session_id;
+    document.getElementById('qrSession').textContent=b2SessionId;
+    if (r.data.qr_png_base64) {
+      document.getElementById('qrImg').src = 'data:image/png;base64,'+r.data.qr_png_base64;
+    }
+    setQrStatus('等待扫码');
+    b2Timer=setInterval(pollStatus, 2000);
+  } else {
+    setQrStatus('生成失败');
+  }
+});
+
+document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
+  if(!b2SessionId){ alert('请先生成二维码'); return; }
+  const r=await postJson('/media/admin/strm115B2Complete', {session_id: b2SessionId});
+  appendLog('complete: '+JSON.stringify(r));
+  if(r && r.code===200){
+    setQrStatus('授权完成');
+    stopPoll();
+    await refreshStatus();
+    alert('授权完成');
+  } else {
+    alert((r && r.message) ? r.message : '授权失败');
+  }
+});
+
+refreshStatus();
+</script>
+
+{include file="public/_footer" /}

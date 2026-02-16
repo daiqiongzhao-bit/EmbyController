@@ -2328,6 +2328,20 @@ private function strm115_session_dir()
         if (!$ok) {
             return json(['code' => 500, 'message' => '115请求失败：' . $raw]);
         }
+        // cache pickcode for later use
+        try {
+            if (is_array($j) && isset($j['data']['data']) && is_array($j['data']['data'])) {
+                foreach ($j['data']['data'] as $it) {
+                    if (is_array($it)) {
+                        $fid = (string)($it['fid'] ?? $it['file_id'] ?? '');
+                        $pc  = (string)($it['pc'] ?? $it['pick_code'] ?? '');
+                        if ($fid !== '' && $pc !== '') {
+                            $this->strm115_pickcode_cache_put($fid, $pc);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {}
         return json(['code' => 200, 'data' => $j, 'http' => $http]);
     }
 
@@ -2839,6 +2853,138 @@ $base = rtrim($baseUrl, '/');
             }
         }
         return json(['code'=>200,'data'=>['count'=>$total,'dirsVisited'=>$dirsVisited,'written'=>$written]]);
+    }
+
+
+    // GET /media/admin/cloudStorage
+    public function cloudStorage()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        return view('admin/cloud_storage');
+    }
+
+    // GET /media/admin/strm115Status
+    public function strm115Status()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $access = $this->strm115_cfg_get('b2_access_token', '');
+        $refresh = $this->strm115_cfg_get('b2_refresh_token', '');
+        $expiresAt = $this->strm115_cfg_get('b2_expires_at', '');
+        $sigEnabled = $this->strm115_cfg_get('play_sig_enabled', '0');
+        $sigTtl = $this->strm115_cfg_get('play_sig_ttl', '600');
+
+        $mask = function($t){
+            $t = (string)$t;
+            if ($t === '') return '';
+            if (strlen($t) <= 10) return str_repeat('*', strlen($t));
+            return substr($t,0,5).str_repeat('*', strlen($t)-10).substr($t,-5);
+        };
+
+        return json(['code'=>200,'data'=>[
+            'authorized' => ($access !== ''),
+            'expires_at' => $expiresAt,
+            'access_masked' => $mask($access),
+            'refresh_masked' => $mask($refresh),
+            'play_sig_enabled' => $sigEnabled,
+            'play_sig_ttl' => $sigTtl,
+        ]]);
+    }
+
+
+    private function strm115_pickcode_cache_path()
+    {
+        $dir = $this->strm115_cfg_get('pickcode_cache_dir', '/app/runtime/media/strm115');
+        if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+        return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'pickcode_cache.json';
+    }
+
+    private function strm115_pickcode_cache_load()
+    {
+        $path = $this->strm115_pickcode_cache_path();
+        if (!is_file($path)) return [];
+        $j = json_decode(@file_get_contents($path), true);
+        return is_array($j) ? $j : [];
+    }
+
+    private function strm115_pickcode_cache_save($j)
+    {
+        $path = $this->strm115_pickcode_cache_path();
+        @file_put_contents($path, json_encode($j, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+    }
+
+    private function strm115_pickcode_cache_put($fileId, $pickcode)
+    {
+        $fileId = (string)$fileId;
+        $pickcode = (string)$pickcode;
+        if ($fileId === '' || $pickcode === '') return;
+        $j = $this->strm115_pickcode_cache_load();
+        $j[$fileId] = ['pickcode'=>$pickcode, 'updatedAt'=>date('c')];
+        $this->strm115_pickcode_cache_save($j);
+    }
+
+
+    // GET /media/admin/strm115PickcodeCache
+    public function strm115PickcodeCache()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        return view('admin/pickcode_cache');
+    }
+
+    // GET /media/admin/strm115PickcodeCacheList?q=
+    public function strm115PickcodeCacheList()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $q = trim((string)input('q',''));
+        $j = $this->strm115_pickcode_cache_load();
+        $items = [];
+        foreach ($j as $fileId => $row) {
+            $pc = (string)($row['pickcode'] ?? '');
+            $ua = (string)($row['updatedAt'] ?? '');
+            if ($q !== '') {
+                if (strpos((string)$fileId, $q) === false && strpos($pc, $q) === false) {
+                    continue;
+                }
+            }
+            $items[] = ['fileId'=>(string)$fileId,'pickcode'=>$pc,'updatedAt'=>$ua];
+        }
+        // sort by updatedAt desc
+        usort($items, function($a,$b){ return strcmp((string)$b['updatedAt'], (string)$a['updatedAt']); });
+        $items = array_slice($items, 0, 200);
+        return json(['code'=>200,'data'=>['total'=>count($j),'items'=>$items]]);
+    }
+
+    // POST /media/admin/strm115PickcodeCacheDelete  {fileId}
+    public function strm115PickcodeCacheDelete()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+        $fileId = trim((string)($payload['fileId'] ?? ''));
+        if ($fileId === '') return json(['code'=>400,'message'=>'fileId 不能为空']);
+        $j = $this->strm115_pickcode_cache_load();
+        unset($j[$fileId]);
+        $this->strm115_pickcode_cache_save($j);
+        return json(['code'=>200]);
+    }
+
+    // POST /media/admin/strm115PickcodeCacheClear
+    public function strm115PickcodeCacheClear()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $this->strm115_pickcode_cache_save([]);
+        return json(['code'=>200]);
     }
 
 }
