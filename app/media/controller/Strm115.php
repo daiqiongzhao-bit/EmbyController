@@ -45,6 +45,43 @@ class Strm115 extends BaseController
         return [true, $resp, $code, $json];
     }
 
+
+
+    private function audit_log(array $row)
+    {
+        try {
+            $dir = $this->cfg_get('audit_dir', '/app/runtime/media/strm115/audit');
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            $file = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . date('Ymd') . '.log';
+            $row['ts'] = date('c');
+            @file_put_contents($file, json_encode($row, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND);
+        } catch (\Throwable $e) {
+        }
+    }
+
+    private function allow_check($fileId)
+    {
+        $rootCid = $this->cfg_get('root_cid', '');
+        if ($rootCid === '') {
+            return [true, ''];
+        }
+        $allowDir = $this->cfg_get('allowlist_dir', '/app/runtime/media/strm115');
+        $allowPath = rtrim($allowDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'allowlist.json';
+        if (!is_file($allowPath)) {
+            return [false, $rootCid];
+        }
+        $j = json_decode(@file_get_contents($allowPath), true);
+        if (!is_array($j) || !isset($j['roots'][$rootCid])) {
+            return [false, $rootCid];
+        }
+        $m = $j['roots'][$rootCid];
+        if (!is_array($m)) {
+            return [false, $rootCid];
+        }
+        return [isset($m[(string)$fileId]), $rootCid];
+    }
     // GET /media/strm115/redirect?fileId=...&pickcode=...&token=...
     // Returns 302 to direct link
     public function redirect()
@@ -64,6 +101,15 @@ class Strm115 extends BaseController
         $pickcode = (string)input('pickcode', '');
         if ($fileId === '' && $pickcode === '') {
             return response('bad request', 400);
+        }
+
+        // ROOTCID_BLOCK: enforce rootCid allowlist for fileId
+        if ($fileId !== '') {
+            [$okAllow, $rootCid] = $this->allow_check($fileId);
+            if (!$okAllow) {
+                $this->audit_log(['event'=>'redirect_block','fileId'=>$fileId,'rootCid'=>$rootCid,'ip'=>Request::ip()]);
+                return response('forbidden', 403);
+            }
         }
 
         $token = $this->cfg_get('b2_access_token', '');
@@ -98,6 +144,7 @@ class Strm115 extends BaseController
         if ($resp === false) {
             $err = curl_error($ch);
             curl_close($ch);
+            $this->audit_log(['event'=>'redirect_upstream_error','fileId'=>$fileId,'pickcode'=>$pickcode,'ip'=>Request::ip(),'err'=>$err]);
             return response('upstream error: ' . $err, 502);
         }
         $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -113,8 +160,11 @@ class Strm115 extends BaseController
         }
 
         if ($direct === '') {
+            $this->audit_log(['event'=>'redirect_no_url','fileId'=>$fileId,'pickcode'=>$pickcode,'ip'=>Request::ip(),'http'=>$code]);
             return response('no direct url (http=' . $code . '): ' . $resp, 502);
         }
+
+        $this->audit_log(['event'=>'redirect_ok','fileId'=>$fileId,'pickcode'=>$pickcode,'ip'=>Request::ip(),'http'=>$code]);
 
         return redirect($direct, 302);
     }

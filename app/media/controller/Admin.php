@@ -2349,6 +2349,9 @@ private function strm115_session_dir()
         $items = $payload['items'] ?? [];
         $mode = (string)($payload['mode'] ?? 'url'); // url|kv
 
+        $rootCid = trim((string)($payload['rootCid'] ?? ''));
+
+
         if ($outDir === '' || $baseUrl === '') {
             return json(['code' => 400, 'message' => 'outDir/baseUrl 不能为空']);
         }
@@ -2368,7 +2371,18 @@ private function strm115_session_dir()
             $this->strm115_cfg_upsert('strm115', 'play_secret', $secret);
         }
 
-        $base = rtrim($baseUrl, '/');
+        
+        $allowDir = $this->strm115_cfg_get('allowlist_dir', '/app/runtime/media/strm115');
+        if (!is_dir($allowDir)) { @mkdir($allowDir, 0755, true); }
+        $allowPath = rtrim($allowDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'allowlist.json';
+        $allow = [];
+        if (is_file($allowPath)) { $tmp = json_decode(@file_get_contents($allowPath), true); if (is_array($tmp)) $allow = $tmp; }
+        if (!isset($allow['roots']) || !is_array($allow['roots'])) $allow['roots'] = [];
+        if ($rootCid !== '') {
+            $allow['root_cid'] = $rootCid;
+            if (!isset($allow['roots'][$rootCid]) || !is_array($allow['roots'][$rootCid])) $allow['roots'][$rootCid] = [];
+        }
+$base = rtrim($baseUrl, '/');
         $count = 0;
         $written = [];
 
@@ -2397,9 +2411,32 @@ private function strm115_session_dir()
             }
             $count++;
             $written[] = $outPath;
+            if ($rootCid !== '') { $allow['roots'][$rootCid][$fileId] = 1; }
         }
 
-        return json(['code' => 200, 'data' => ['count' => $count, 'written' => $written, 'play_secret' => $secret]]);
+        @file_put_contents($allowPath, json_encode($allow, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+
+        return json(['code' => 200, 'data' => ['count' => $count, 'written' => $written, 'play_secret' => $secret, 'rootCid' => $rootCid]]);
+    }
+
+
+    // POST /media/admin/strm115RootSave  body: {rootCid}
+    public function strm115RootSave()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        if (!Request::isPost()) {
+            return json(['code' => 405, 'message' => 'Method Not Allowed']);
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+        $rootCid = trim((string)($payload['rootCid'] ?? ''));
+        if ($rootCid === '') {
+            return json(['code' => 400, 'message' => 'rootCid 不能为空']);
+        }
+        $this->strm115_cfg_upsert('strm115', 'root_cid', $rootCid);
+        return json(['code' => 200, 'data' => ['rootCid' => $rootCid]]);
     }
 
 }
