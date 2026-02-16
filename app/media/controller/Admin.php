@@ -2662,46 +2662,7 @@ $base = rtrim($baseUrl, '/');
         ]]);
     }
 
-        // generate
-        $count = 0;
-        $written = [];
-        foreach ($files as $it) {
-            $fileId = (string)($it['fileId'] ?? '');
-            $name = (string)($it['name'] ?? $fileId);
-            if ($fileId === '') continue;
 
-            $safeName = preg_replace('/[\\\/\:\*\?\"\<\>\|]+/', '_', $name);
-            $safeName = trim($safeName);
-            if ($safeName === '') $safeName = $fileId;
-            if (!preg_match('/\.strm$/i', $safeName)) $safeName .= '.strm';
-            $outPath = rtrim($outDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $safeName;
-
-            if ($mode === 'kv') {
-                $content = 'provider=115,fileId=' . $fileId;
-            } else {
-                $content = $base . '/media/strm115/redirect?fileId=' . rawurlencode($fileId) . '&token=' . rawurlencode($secret);
-            }
-
-            if (@file_put_contents($outPath, $content) === false) {
-                continue;
-            }
-            $count++;
-            if ($count <= 50) $written[] = $outPath; // avoid huge payload
-            if ($rootCid !== '') { $allow['roots'][$rootCid][$fileId] = 1; }
-        }
-
-        @file_put_contents($allowPath, json_encode($allow, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
-
-        return json(['code' => 200, 'data' => [
-            'count' => $count,
-            'written' => $written,
-            'play_secret' => $secret,
-            'rootCid' => $rootCid,
-            'dirsVisited' => $dirsVisited,
-            'maxFiles' => $maxFiles,
-            'maxDepth' => $maxDepth,
-        ]]);
-    }
 
 
     private function strm115_filter_cfg()
