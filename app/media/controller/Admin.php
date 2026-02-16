@@ -2140,7 +2140,6 @@ private function strm115_session_dir()
                 'Content-Type' => $result->getMimeType(),
                 'Cache-Control' => 'no-store',
             ]);
-        }
         } catch (\Throwable $e) {
             return response('qr error: ' . $e->getMessage(), 500);
         }
