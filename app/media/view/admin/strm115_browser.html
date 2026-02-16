@@ -147,10 +147,11 @@ function navUp115(){
 }
 
 function normItem(raw){
-  const isDir = (raw.is_dir===1) || (raw.fc===0) || (raw.file_category===0) || (raw.type==='dir');
+  const fc = raw.fc ?? raw.file_category ?? raw.fileCategory;
+  const isDir = (raw.is_dir===1 || raw.is_dir==='1' || raw.is_dir===true) || (fc!=null && String(fc)==='0') || (raw.type==='dir');
   return {
     fileId: String(raw.file_id ?? raw.fid ?? raw.fileId ?? ''),
-    cid: String(raw.cid ?? raw.category_id ?? raw.dir_id ?? raw.directory_id ?? raw.folder_id ?? raw.file_id ?? raw.fid ?? ''),
+    cid: String(raw.cid ?? raw.category_id ?? raw.dir_id ?? raw.directory_id ?? raw.folder_id ?? ( (fc!=null && String(fc)==='0') ? (raw.fid ?? raw.file_id) : null ) ?? raw.file_id ?? raw.fid ?? ''),
     pickcode: String(raw.pick_code ?? raw.pc ?? raw.pickcode ?? ''),
     name: String(raw.file_name ?? raw.fn ?? raw.name ?? ''),
     isDir: !!isDir,

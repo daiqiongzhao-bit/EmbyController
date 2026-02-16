@@ -265,7 +265,8 @@ let _115_lastSig = "";
 
 function normItem(raw){
   // try common field names
-  const isDir = (raw.is_dir===1) || (raw.fc===0) || (raw.file_category===0) || (raw.type==='dir');
+  const fc = raw.fc ?? raw.file_category ?? raw.fileCategory;
+  const isDir = (raw.is_dir===1 || raw.is_dir==='1' || raw.is_dir===true) || (fc!=null && String(fc)==='0') || (raw.type==='dir');
   return {
     fileId: String(raw.file_id ?? raw.fid ?? raw.fileId ?? ''),
     pickcode: String(raw.pick_code ?? raw.pc ?? raw.pickcode ?? ''),
