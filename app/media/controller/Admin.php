@@ -2507,4 +2507,92 @@ $base = rtrim($baseUrl, '/');
         ]]);
     }
 
+
+    // GET /media/admin/strm115Security
+    public function strm115Security()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        return view('admin/strm115_security');
+    }
+
+    // GET /media/admin/strm115SecurityGet
+    public function strm115SecurityGet()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $keys = ['play_sig_enabled','play_sig_allow_legacy','play_sig_ttl','root_cid'];
+        $data = [];
+        foreach ($keys as $k) {
+            $data[$k] = $this->strm115_cfg_get($k, '');
+        }
+        if ($data['play_sig_allow_legacy'] === '') $data['play_sig_allow_legacy'] = '1';
+        if ($data['play_sig_ttl'] === '') $data['play_sig_ttl'] = '600';
+        return json(['code'=>200,'data'=>$data]);
+    }
+
+    // POST /media/admin/strm115SecuritySave
+    public function strm115SecuritySave()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        if (!Request::isPost()) {
+            return json(['code'=>405,'message'=>'Method Not Allowed']);
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+
+        $enabled = ((string)($payload['play_sig_enabled'] ?? '0') === '1') ? '1' : '0';
+        $legacy  = ((string)($payload['play_sig_allow_legacy'] ?? '1') === '1') ? '1' : '0';
+        $ttl = (int)($payload['play_sig_ttl'] ?? 600);
+        if ($ttl <= 0) $ttl = 600;
+
+        $this->strm115_cfg_upsert('strm115', 'play_sig_enabled', $enabled);
+        $this->strm115_cfg_upsert('strm115', 'play_sig_allow_legacy', $legacy);
+        $this->strm115_cfg_upsert('strm115', 'play_sig_ttl', (string)$ttl);
+
+        return json(['code'=>200,'data'=>['play_sig_enabled'=>$enabled,'play_sig_allow_legacy'=>$legacy,'play_sig_ttl'=>(string)$ttl]]);
+    }
+
+    // POST /media/admin/strm115TempLink  body: {fileId, baseUrl(optional)}
+    public function strm115TempLink()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        if (!Request::isPost()) {
+            return json(['code'=>405,'message'=>'Method Not Allowed']);
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+        $fileId = trim((string)($payload['fileId'] ?? ''));
+        if ($fileId === '') {
+            return json(['code'=>400,'message'=>'fileId 不能为空']);
+        }
+        $baseUrl = trim((string)($payload['baseUrl'] ?? ''));
+        if ($baseUrl === '') {
+            $baseUrl = (string)Request::domain();
+        }
+        $baseUrl = rtrim($baseUrl, '/');
+
+        $secret = $this->strm115_cfg_get('play_secret', '');
+        if ($secret === '') {
+            // auto init secret if missing
+            $secret = bin2hex(random_bytes(16));
+            $this->strm115_cfg_upsert('strm115', 'play_secret', $secret);
+        }
+        $ts = (string)time();
+        $pickcode = '';
+        $sig = hash_hmac('sha256', $fileId . '|' . $pickcode . '|' . $ts, $secret);
+        $url = $baseUrl . '/media/strm115/redirect?' . http_build_query([
+            'fileId' => $fileId,
+            'ts' => $ts,
+            'sig' => $sig,
+        ]);
+        return json(['code'=>200,'data'=>['url'=>$url,'ts'=>$ts]]);
+    }
+
 }
