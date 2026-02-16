@@ -75,6 +75,61 @@
 <pre id="log" class="w-full min-h-[120px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
     </div>
   </div>
+
+
+  <div class="mt-8 bg-white/5 rounded-xl p-6">
+    <h2 class="text-lg font-semibold mb-4">115 目录浏览 / 生成 STRM（v013）</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">CID（目录ID，根目录通常 0）</label>
+        <input id="cid" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="0" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">offset</label>
+        <input id="offset" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="0" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">limit（<=500）</label>
+        <input id="limit" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="200" />
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3 mt-4">
+      <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" onclick="load115List()">加载目录</button>
+      <button class="px-4 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30" onclick="selectAll115(true)">全选文件</button>
+      <button class="px-4 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30" onclick="selectAll115(false)">全不选</button>
+      <span id="listSummary" class="text-sm text-gray-400"></span>
+    </div>
+
+    <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">输出目录 outDir（服务器路径）</label>
+        <input id="outDir115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="/opt/embycontroller/strm-out" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">baseUrl（写入 .strm，用你反代/域名）</label>
+        <input id="baseUrl115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="https://你的域名" />
+        <p class="text-xs text-gray-500 mt-1">留空会失败，建议填外网访问地址。</p>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">STRM 模式</label>
+        <select id="mode115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10">
+          <option value="url">url（推荐：可直接播放）</option>
+          <option value="kv">kv（provider=115,fileId=...）</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 mt-4">
+      <button class="px-4 py-2 rounded bg-green-600 hover:bg-green-500" onclick="gen115Strm()">生成选中的 STRM</button>
+      <span id="genSummary" class="text-sm text-gray-400"></span>
+    </div>
+
+    <div class="mt-4">
+      <div class="text-sm text-gray-300 mb-2">文件列表</div>
+      <div id="fileList" class="max-h-[380px] overflow-auto border border-white/10 rounded-lg bg-black/20 p-2"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -188,6 +243,113 @@ document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
   }
 });
 
+
+
+// ----- v013: 115 list + strm gen -----
+let _115_items = [];
+
+function normItem(raw){
+  // try common field names
+  const isDir = (raw.is_dir===1) || (raw.fc===0) || (raw.file_category===0) || (raw.type==='dir');
+  return {
+    fileId: String(raw.file_id ?? raw.fid ?? raw.fileId ?? ''),
+    pickcode: String(raw.pick_code ?? raw.pc ?? raw.pickcode ?? ''),
+    name: String(raw.file_name ?? raw.fn ?? raw.name ?? ''),
+    isDir: !!isDir,
+    size: raw.size ?? raw.fs ?? ''
+  };
+}
+
+async function load115List(){
+  const cid = document.getElementById('cid').value.trim();
+  const offset = document.getElementById('offset').value.trim();
+  const limit = document.getElementById('limit').value.trim();
+  document.getElementById('listSummary').textContent='加载中...';
+  const res = await fetch(`/media/admin/strm115B2List?cid=${encodeURIComponent(cid)}&offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}`);
+  const j = await res.json().catch(()=>({code:500,message:'json parse failed'}));
+  if (!j || j.code!==200) {
+    document.getElementById('listSummary').textContent = '加载失败：'+(j.message||res.status);
+    return;
+  }
+  // 115 response shape may differ; try find list
+  let arr = [];
+  const data = j.data || {};
+  if (Array.isArray(data.data)) arr = data.data;
+  else if (Array.isArray(data.files)) arr = data.files;
+  else if (Array.isArray(data.data?.list)) arr = data.data.list;
+  else if (Array.isArray(data.data?.files)) arr = data.data.files;
+  else if (Array.isArray(data.data?.data)) arr = data.data.data;
+
+  _115_items = arr.map(normItem).filter(it=>it.fileId && it.name);
+
+  const dirs = _115_items.filter(x=>x.isDir).length;
+  const files = _115_items.filter(x=>!x.isDir).length;
+  document.getElementById('listSummary').textContent = `共 ${_115_items.length} 项（文件夹 ${dirs}，文件 ${files}）`;
+
+  render115List();
+}
+
+function render115List(){
+  const box = document.getElementById('fileList');
+  box.innerHTML = '';
+  if (!_115_items.length) {
+    box.innerHTML = '<div class="text-sm text-gray-500 p-2">暂无数据</div>';
+    return;
+  }
+  for (const it of _115_items) {
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 px-2 py-1 hover:bg-white/5 rounded';
+
+    if (it.isDir) {
+      row.innerHTML = `<span class="text-xs text-gray-400">📁</span><span class="text-sm text-gray-200">${escapeHtml(it.name)}</span><span class="text-xs text-gray-500 ml-auto">cid?（目录不生成strm）</span>`;
+    } else {
+      row.innerHTML = `
+        <input class="accent-blue-500" type="checkbox" data-fileid="${escapeHtml(it.fileId)}" data-name="${escapeHtml(it.name)}" />
+        <span class="text-sm text-gray-200">${escapeHtml(it.name)}</span>
+        <span class="text-xs text-gray-500 ml-auto">${escapeHtml(it.fileId)}</span>
+      `;
+    }
+    box.appendChild(row);
+  }
+}
+
+function selectAll115(on){
+  const box = document.getElementById('fileList');
+  box.querySelectorAll('input[type=checkbox]').forEach(cb=>{cb.checked=!!on;});
+}
+
+async function gen115Strm(){
+  const outDir = document.getElementById('outDir115').value.trim();
+  const baseUrl = document.getElementById('baseUrl115').value.trim();
+  const mode = document.getElementById('mode115').value;
+
+  const box = document.getElementById('fileList');
+  const sel = [];
+  box.querySelectorAll('input[type=checkbox]:checked').forEach(cb=>{
+    sel.push({fileId: cb.getAttribute('data-fileid'), name: cb.getAttribute('data-name')});
+  });
+  if (!sel.length) {
+    document.getElementById('genSummary').textContent = '请先勾选文件';
+    return;
+  }
+  if (!outDir || !baseUrl) {
+    document.getElementById('genSummary').textContent = 'outDir/baseUrl 不能为空';
+    return;
+  }
+  document.getElementById('genSummary').textContent = '生成中...';
+
+  const r = await postJson('/media/admin/strm115GenStrm', {outDir, baseUrl, items: sel, mode});
+  if (!r || r.code!==200) {
+    document.getElementById('genSummary').textContent = '生成失败：'+(r.message||'');
+    return;
+  }
+  document.getElementById('genSummary').textContent = `已生成 ${r.data.count} 个，输出目录：${outDir}`;
+  appendLog('gen115: '+JSON.stringify(r));
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"]/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[s]));
+}
 </script>
 
 {include file="public/_footer" /}
