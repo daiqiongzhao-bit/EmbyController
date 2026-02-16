@@ -38,6 +38,8 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2 mt-4">
+        <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="toggleAdvanced()">高级设置</button>
+        <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="toggleLog()">日志</button>
         <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" onclick="load115List()">加载目录</button>
         <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="selectAll115(true)">全选文件</button>
         <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="selectAll115(false)">全不选</button>
@@ -48,7 +50,7 @@
         <button class="px-3 py-1 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-xs" onclick="navRoot115()">回到根目录</button>
       </div>
 
-      <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div id="advBox" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="block text-sm text-gray-300 mb-1">输出目录 outDir（服务器路径）</label>
           <input id="outDir115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="/opt/embycontroller/strm-out" />
@@ -56,7 +58,7 @@
         <div>
           <label class="block text-sm text-gray-300 mb-1">baseUrl（写入 .strm，用你反代/域名）</label>
           <input id="baseUrl115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="https://你的域名" />
-          <p class="text-[11px] text-gray-500 mt-1">留空会失败，建议填外网访问地址。</p>
+          <p class="text-[11px] text-gray-500 mt-1">留空会失败，建议填外网访问地址。手机端建议先点“高级设置”再填。</p>
         </div>
         <div>
           <label class="block text-sm text-gray-300 mb-1">STRM 模式</label>
@@ -80,7 +82,7 @@
       </div>
     </div>
 
-    <pre id="log" class="mt-4 w-full min-h-[100px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
+    <pre id="log" class="mt-4 w-full min-h-[80px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto hidden"></pre>
   </div>
 </div>
 
@@ -235,11 +237,16 @@ function render115List(){
   for (const it of dirs) {
     const row = mkRow(`
       <button class="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入" data-cid="${escapeHtml(it.cid||it.fileId)}">进入</button>
+      <button class="text-xs px-2 py-1 rounded bg-green-700/70 hover:bg-green-600 border border-white/10" title="递归生成" data-gen="1">递归生成</button>
       <span class="text-gray-400">📁</span>
       <span class="text-sm text-gray-200 truncate" style="max-width:620px">${escapeHtml(it.name)}</span>
       <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}  fid=${escapeHtml(it.fileId)}</span>
     `);
     row.querySelector('button').addEventListener('click', ()=>enterDir115(it));
+    const genBtn = row.querySelector('button[data-gen="1"]');
+    if(genBtn){ genBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); genFolder115(it); }); }
+    // tap whole row to enter
+    row.addEventListener('click', ()=>enterDir115(it));
     row.addEventListener('dblclick', ()=>enterDir115(it));
     box.appendChild(row);
   }
@@ -296,6 +303,47 @@ async function gen115Strm(){
   document.getElementById('genSummary').textContent = `已生成 ${r.data.count} 个，输出目录：${outDir}`;
 }
 
+
+
+function toggleLog(){
+  const el=document.getElementById('log');
+  if(!el) return;
+  el.classList.toggle('hidden');
+}
+function toggleAdvanced(){
+  const el=document.getElementById('advBox');
+  if(!el) return;
+  el.classList.toggle('hidden');
+}
+
+async function genFolder115(it){
+  const outDir = document.getElementById('outDir115').value.trim();
+  const baseUrl = document.getElementById('baseUrl115').value.trim();
+  const mode = document.getElementById('mode115').value;
+  const rootCid = document.getElementById('rootCid115').value.trim();
+
+  if (!outDir || !baseUrl) {
+    document.getElementById('genSummary').textContent = 'outDir/baseUrl 不能为空';
+    toggleAdvanced();
+    return;
+  }
+  document.getElementById('genSummary').textContent = '递归生成中...';
+  const cid = String(it.cid || it.fileId);
+
+  const r = await postJson('/media/admin/strm115GenStrmFromFolder', {
+    cid, outDir, baseUrl, mode, rootCid,
+    recursive: 1,
+    maxDepth: 8,
+    maxFiles: 5000
+  });
+  appendLog('genFolder: '+JSON.stringify(r).slice(0,2000));
+  if (!r || r.code!==200) {
+    document.getElementById('genSummary').textContent = '生成失败：'+(r.message||'');
+    return;
+  }
+  document.getElementById('genSummary').textContent = `已递归生成 ${r.data.count} 个（遍历目录 ${r.data.dirsVisited}）`;
+}
+
 // init behavior
 
 document.getElementById('rootCid115').addEventListener('change', ()=>{
@@ -304,6 +352,11 @@ document.getElementById('rootCid115').addEventListener('change', ()=>{
   _115_nav=[];
   setCrumb115();
 });
+
+if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+  // mobile default: hide advanced
+  try{ document.getElementById('advBox').classList.add('hidden'); }catch(e){}
+}
 
 function escapeHtml(str){
   return String(str).replace(/[&<>\"]/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[s]));
