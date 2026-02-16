@@ -19,18 +19,18 @@
           <div class="text-lg font-semibold mt-1" id="stAuth">-</div>
           <div class="text-[11px] text-gray-500 mt-1" id="stExp">-</div>
         </div>
-        <div class="bg-black/20 border border-white/10 rounded p-4">
+        <div class="bg-black/20 border border-white/10 rounded p-4 min-w-0">
           <div class="text-xs text-gray-500">Access Token（已脱敏）</div>
-          <div class="text-sm mt-1 truncate" id="stAccess" title="">-</div>
+          <div class="text-sm mt-1 break-all whitespace-normal" id="stAccess" title="">-</div>
         </div>
-        <div class="bg-black/20 border border-white/10 rounded p-4">
+        <div class="bg-black/20 border border-white/10 rounded p-4 min-w-0">
           <div class="text-xs text-gray-500">Refresh Token（已脱敏）</div>
-          <div class="text-sm mt-1 truncate" id="stRefresh" title="">-</div>
+          <div class="text-sm mt-1 break-all whitespace-normal" id="stRefresh" title="">-</div>
         </div>
-        <div class="bg-black/20 border border-white/10 rounded p-4">
+        <div class="bg-black/20 border border-white/10 rounded p-4 min-w-0">
           <div class="text-xs text-gray-500">播放安全</div>
           <div class="text-sm mt-1" id="stSig">-</div>
-          <a class="text-xs text-blue-400 underline" href="/media/admin/strm115Security" target="_blank">打开安全配置</a>
+          <div class="text-[11px] text-gray-500 mt-1">菜单里也能打开安全配置页</div>
         </div>
       </div>
 
@@ -120,7 +120,7 @@ async function refreshStatus(){
   er.textContent = r;
   ea.title = a;
   er.title = r;
-  document.getElementById('stSig').textContent = d.play_sig_enabled==='1' ? ('签名校验：开（TTL='+ (d.play_sig_ttl||'') +'秒）') : '签名校验：关';
+  document.getElementById('stSig').textContent = d.play_sig_enabled==='1' ? ('签名校验：开启（有效期 '+ (d.play_sig_ttl||'') +' 秒）') : '签名校验：关闭';
 }
 
 let b2Timer=null; let b2SessionId='';
