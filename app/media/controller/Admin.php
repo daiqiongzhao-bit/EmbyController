@@ -2074,9 +2074,21 @@ private function strm115_session_dir()
         ];
         file_put_contents($this->strm115_session_dir() . $sessionId . '.json', json_encode($sess, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        return json(['code' => 200, 'data' => [
+        
+
+        // Build qr png base64 to avoid cookie issues on mobile browsers
+        $qrPngB64 = '';
+        try {
+            $qrObj = \Endroid\QrCode\QrCode::create($sess['qrcode'])->setSize(260);
+            $writer = new \Endroid\QrCode\Writer\PngWriter();
+            $qrPngB64 = base64_encode($writer->write($qrObj)->getString());
+        } catch (\Throwable $e) {
+            // ignore; client can still use qr_code_data
+        }
+return json(['code' => 200, 'data' => [
             'session_id' => $sessionId,
             'qr_code_data' => $sess['qrcode'],
+            'qr_png_base64' => $qrPngB64,
         ], 'message' => '请使用115手机客户端扫描二维码']);
     }
 

@@ -159,11 +159,15 @@ document.getElementById('btnB2Gen').addEventListener('click', async ()=>{
   if(r && r.code===200){
     b2SessionId = r.data.session_id;
     document.getElementById('qrSession').textContent=b2SessionId;
+    if (r.data.qr_png_base64) {
+      document.getElementById('qrImg').src = 'data:image/png;base64,'+r.data.qr_png_base64;
+    } else {
     // fetch png with credentials to avoid cookie issues on <img>
     fetch('/media/admin/strm115B2QrPng?session_id='+encodeURIComponent(b2SessionId)+'&_t='+(Date.now()), {credentials:'include'})
       .then(r=>r.blob())
       .then(b=>{ document.getElementById('qrImg').src = URL.createObjectURL(b); })
       .catch(e=>{ appendLog('qr fetch error: '+e); });
+    }
     setQrStatus('等待扫码');
     b2Timer=setInterval(pollStatus, 2000);
   } else {
