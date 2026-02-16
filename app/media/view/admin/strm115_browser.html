@@ -17,72 +17,88 @@
     </div>
 
     <div class="bg-white/5 rounded-xl p-5">
-      <div class="hidden md:flex items-center gap-2 mb-3">
-        <button class="px-4 py-2 rounded bg-green-700 hover:bg-green-600" onclick="genSelectedFolders()">对选中目录递归生成</button>
-        <span class="text-xs text-gray-500">（电脑端：可勾选多个目录一键生成）</span>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div>
-          <label class="block text-sm text-gray-300 mb-1">rootCid（限制生成/播放范围，可选）</label>
-          <input id="rootCid115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如 0 或某个目录ID" value="" />
-          <p class="text-[11px] text-gray-500 mt-1">填写后：只允许 rootCid 内的文件播放（越权 403）</p>
+      <!-- 顶部筛选条（像 Film Fusion 那样，一眼知道要干什么） -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div class="md:col-span-3">
+          <label class="block text-sm text-gray-300 mb-1">播放范围限制（可选）</label>
+          <input id="rootCid115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="填目录ID；留空=不限制" value="" />
+          <p class="text-[11px] text-gray-500 mt-1">开启后：只允许 rootCid 内的文件播放/生成（越权 403）。</p>
         </div>
-        <div>
-          <label class="block text-sm text-gray-300 mb-1">CID（目录ID）</label>
+        <div class="md:col-span-2">
+          <label class="block text-sm text-gray-300 mb-1">当前目录（CID）</label>
           <input id="cid" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="0" />
         </div>
-        <div>
-          <label class="block text-sm text-gray-300 mb-1">offset</label>
-          <input id="offset" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="0" />
+        <div class="md:col-span-2">
+          <label class="block text-sm text-gray-300 mb-1">分页</label>
+          <div class="flex gap-2">
+            <input id="offset" class="w-1/2 px-3 py-2 rounded bg-black/30 border border-white/10" value="0" title="offset" />
+            <input id="limit" class="w-1/2 px-3 py-2 rounded bg-black/30 border border-white/10" value="200" title="limit（<=500）" />
+          </div>
+          <p class="text-[11px] text-gray-500 mt-1">仅影响列表加载；递归生成会自动翻页。</p>
         </div>
-        <div>
-          <label class="block text-sm text-gray-300 mb-1">limit（<=500）</label>
-          <input id="limit" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="200" />
+        <div class="md:col-span-5 flex flex-wrap gap-2 justify-start md:justify-end">
+          <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" onclick="load115List()">加载目录</button>
+          <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="navUp115()">返回上级</button>
+          <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="navRoot115()">回到根目录</button>
+          <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="toggleAdvanced()">设置</button>
+          <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="toggleLog()">日志</button>
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2 mt-4">
-        <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="toggleAdvanced()">高级设置</button>
-        <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="toggleLog()">日志</button>
-        <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" onclick="load115List()">加载目录</button>
-        <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="selectAll115(true)">全选文件</button>
-        <button class="px-3 py-2 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-sm" onclick="selectAll115(false)">全不选</button>
-        <span id="listSummary" class="text-sm text-gray-400 ml-1"></span>
-        <span class="text-gray-700 px-2">|</span>
-        <span class="text-xs text-gray-400" id="crumb"></span>
-        <button class="px-3 py-1 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-xs" onclick="navUp115()">返回上级</button>
-        <button class="px-3 py-1 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-xs" onclick="navRoot115()">回到根目录</button>
+      <!-- 面包屑 & 统计 -->
+      <div class="flex flex-wrap items-center gap-2 mt-4 text-xs">
+        <span class="text-gray-400" id="crumb"></span>
+        <span class="text-gray-700 px-1">|</span>
+        <span id="listSummary" class="text-gray-400"></span>
       </div>
 
+      <!-- 高级设置（默认可折叠） -->
       <div id="advBox" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="block text-sm text-gray-300 mb-1">输出目录 outDir（服务器路径）</label>
+          <label class="block text-sm text-gray-300 mb-1">STRM 输出位置（服务器目录）</label>
           <input id="outDir115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="/opt/embycontroller/strm-out" />
+          <p class="text-[11px] text-gray-500 mt-1">生成的 .strm 会放到这个目录，Emby 需要扫描它。</p>
         </div>
         <div>
-          <label class="block text-sm text-gray-300 mb-1">baseUrl（写入 .strm，用你反代/域名）</label>
+          <label class="block text-sm text-gray-300 mb-1">外网访问地址（写入 .strm，必填）</label>
           <input id="baseUrl115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="https://你的域名" />
-          <p class="text-[11px] text-gray-500 mt-1">留空会失败，建议填外网访问地址。手机端建议先点“高级设置”再填。</p>
+          <p class="text-[11px] text-gray-500 mt-1">例如 https://你的域名（Emby 播放时会用它访问 redirect 获取直链）。</p>
         </div>
         <div>
-          <label class="block text-sm text-gray-300 mb-1">STRM 模式</label>
+          <label class="block text-sm text-gray-300 mb-1">生成方式</label>
           <select id="mode115" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10">
-            <option value="url">url（推荐：可直接播放）</option>
-            <option value="kv">kv（provider=115,fileId=...）</option>
+            <option value="url">直链跳转播放（推荐）</option>
+            <option value="kv">Provider 模式（provider=115,fileId=...）</option>
           </select>
+          <p class="text-[11px] text-gray-500 mt-1">一般选“直链跳转播放”。Provider 模式属于高级用法。</p>
         </div>
       </div>
 
-      <div class="flex items-center gap-3 mt-4">
-        <button class="px-4 py-2 rounded bg-green-600 hover:bg-green-500" onclick="gen115Strm()">生成选中的 STRM</button>
-        <span id="genSummary" class="text-sm text-gray-400"></span>
+      <!-- 操作条 -->
+      <div class="flex flex-wrap items-center gap-2 mt-4">
+        <button class="px-4 py-2 rounded bg-green-600 hover:bg-green-500" onclick="gen115Strm()">生成已勾选文件的 STRM</button>
+        <button class="hidden md:inline-flex px-4 py-2 rounded bg-green-700 hover:bg-green-600" onclick="genSelectedFolders()">对选中目录递归生成</button>
+        <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="selectAll115(true)">全选文件</button>
+        <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="selectAll115(false)">全不选</button>
+        <span id="genSummary" class="text-sm text-gray-400 ml-1"></span>
       </div>
 
-      <div class="mt-4">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-sm text-gray-300">文件列表 <span class="text-xs text-gray-500">（点击文件夹进入；双击也可）</span></div>
+      <!-- 浏览区：左目录/右文件（可拖动宽度） -->
+      <div class="mt-4 border border-white/10 rounded-xl bg-black/20 overflow-hidden">
+        <div id="splitWrap" class="flex w-full" style="height: 560px;">
+          <div id="dirPane" class="overflow-auto" style="width: 36%; min-width: 220px;">
+            <div class="px-3 py-2 text-sm text-gray-300 border-b border-white/10 flex items-center justify-between">
+              <span>目录</span>
+              <span class="text-[11px] text-gray-500">（勾选可批量递归生成）</span>
+            </div>
+            <div id="dirList" class="p-2 text-sm"></div>
+          </div>
+          <div id="splitHandle" class="w-[6px] cursor-col-resize bg-white/10 hover:bg-white/20"></div>
+          <div id="filePane" class="flex-1 overflow-auto">
+            <div class="px-3 py-2 text-sm text-gray-300 border-b border-white/10">文件</div>
+            <div id="fileList" class="p-2 text-sm"></div>
+          </div>
         </div>
-        <div id="fileList" class="max-h-[520px] overflow-auto border border-white/10 rounded-lg bg-black/20 p-1 text-sm"></div>
       </div>
     </div>
 
@@ -221,61 +237,64 @@ async function enterDir115(it){
 }
 
 function render115List(){
-  const box = document.getElementById('fileList');
-  box.innerHTML = '';
+  const dirBox = document.getElementById('dirList');
+  const fileBox = document.getElementById('fileList');
+  if(dirBox) dirBox.innerHTML = '';
+  if(fileBox) fileBox.innerHTML = '';
+
   if (!_115_items.length) {
-    box.innerHTML = '<div class="text-xs text-gray-500 p-2">暂无数据</div>';
+    if(dirBox) dirBox.innerHTML = '<div class="text-xs text-gray-500 p-2">暂无目录</div>';
+    if(fileBox) fileBox.innerHTML = '<div class="text-xs text-gray-500 p-2">暂无文件</div>';
     return;
   }
 
   const dirs = _115_items.filter(x=>x.isDir);
   const files = _115_items.filter(x=>!x.isDir);
 
-  const mkRow = (html) => {
+  const mkRow = (cls, html) => {
     const row = document.createElement('div');
-    row.className = 'flex items-center gap-2 px-2 py-1 hover:bg-white/5 rounded';
+    row.className = cls;
     row.innerHTML = html;
     return row;
   };
 
-  for (const it of dirs) {
-    const row = mkRow(`
-      <input class="hidden md:block accent-blue-500" type="checkbox" data-dirsel="1" data-cid="${escapeHtml(it.cid||it.fileId)}" data-name="${escapeHtml(it.name)}" />
-      <button class="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入" data-cid="${escapeHtml(it.cid||it.fileId)}">进入</button>
-      <button class="text-xs px-2 py-1 rounded bg-green-700/70 hover:bg-green-600 border border-white/10" title="递归生成" data-gen="1">递归生成</button>
-      <span class="text-gray-400">📁</span>
-      <span class="text-sm text-gray-200 truncate" style="max-width:620px">${escapeHtml(it.name)}</span>
-      <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}  fid=${escapeHtml(it.fileId)}</span>
-    `);
-    row.querySelector('button').addEventListener('click', ()=>enterDir115(it));
-    const genBtn = row.querySelector('button[data-gen="1"]');
-    if(genBtn){ genBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); genFolder115(it); }); }
-    // tap whole row to enter
-    row.addEventListener('click', ()=>enterDir115(it));
-    row.addEventListener('dblclick', ()=>enterDir115(it));
-    box.appendChild(row);
+  // 左侧：目录
+  if (dirBox) {
+    for (const it of dirs) {
+      const row = mkRow('flex items-center gap-2 px-2 py-2 hover:bg-white/5 rounded cursor-pointer', `
+        <input class="hidden md:block accent-blue-500" type="checkbox" data-dirsel="1" data-cid="${escapeHtml(it.cid||it.fileId)}" data-name="${escapeHtml(it.name)}" />
+        <span class="text-gray-400">📁</span>
+        <span class="text-sm text-gray-200 truncate" style="max-width:240px">${escapeHtml(it.name)}</span>
+        <button class="ml-auto text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入">进入</button>
+        <button class="text-xs px-2 py-1 rounded bg-green-700/70 hover:bg-green-600 border border-white/10" title="递归生成" data-gen="1">生成</button>
+      `);
+      row.querySelector('button').addEventListener('click', (ev)=>{ ev.stopPropagation(); enterDir115(it); });
+      const genBtn = row.querySelector('button[data-gen="1"]');
+      if(genBtn){ genBtn.addEventListener('click', (ev)=>{ ev.stopPropagation(); genFolder115(it); }); }
+      row.addEventListener('click', ()=>enterDir115(it));
+      row.addEventListener('dblclick', ()=>enterDir115(it));
+      dirBox.appendChild(row);
+    }
   }
 
-  if (dirs.length && files.length) {
-    const sep = document.createElement('div');
-    sep.className = 'my-2 border-t border-white/10';
-    box.appendChild(sep);
-  }
-
-  for (const it of files) {
-    const row = mkRow(`
-      <input class="accent-blue-500" type="checkbox" data-fileid="${escapeHtml(it.fileId)}" data-name="${escapeHtml(it.name)}" />
-      <span class="text-gray-400">🎬</span>
-      <span class="text-sm text-gray-200 truncate" style="max-width:660px">${escapeHtml(it.name)}</span>
-      <span class="text-[11px] text-gray-600 ml-auto">${escapeHtml(it.fileId)}</span>
-    `);
-    box.appendChild(row);
+  // 右侧：文件
+  if (fileBox) {
+    for (const it of files) {
+      const row = mkRow('flex items-center gap-2 px-2 py-2 hover:bg-white/5 rounded', `
+        <input class="accent-blue-500" type="checkbox" data-fileid="${escapeHtml(it.fileId)}" data-name="${escapeHtml(it.name)}" />
+        <span class="text-gray-400">🎬</span>
+        <span class="text-sm text-gray-200 truncate" style="max-width:720px">${escapeHtml(it.name)}</span>
+        <span class="text-[11px] text-gray-600 ml-auto">${escapeHtml(it.fileId)}</span>
+      `);
+      fileBox.appendChild(row);
+    }
   }
 }
 
 function selectAll115(on){
   const box = document.getElementById('fileList');
-  box.querySelectorAll('input[type=checkbox]').forEach(cb=>{cb.checked=!!on;});
+  if(!box) return;
+  box.querySelectorAll('input[data-fileid]').forEach(cb=>{cb.checked=!!on;});
 }
 
 async function gen115Strm(){
@@ -286,7 +305,7 @@ async function gen115Strm(){
 
   const box = document.getElementById('fileList');
   const sel = [];
-  box.querySelectorAll('input[type=checkbox]:checked').forEach(cb=>{
+  box.querySelectorAll('input[data-fileid]:checked').forEach(cb=>{
     sel.push({fileId: cb.getAttribute('data-fileid'), name: cb.getAttribute('data-name')});
   });
   if (!sel.length) {
@@ -330,7 +349,7 @@ async function genSelectedFolders(){
     document.getElementById('genSummary').textContent = "outDir/baseUrl 不能为空";
     return;
   }
-  const box=document.getElementById('fileList');
+  const box=document.getElementById('dirList');
   const folders=[];
   box.querySelectorAll('input[data-dirsel="1"]:checked').forEach(cb=>{
     folders.push({cid: cb.getAttribute('data-cid'), name: cb.getAttribute('data-name')});
@@ -389,7 +408,50 @@ document.getElementById('rootCid115').addEventListener('change', ()=>{
 if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
   // mobile default: hide advanced
   try{ document.getElementById('advBox').classList.add('hidden'); }catch(e){}
+  // mobile: stack panes
+  try{
+    const w=document.getElementById('splitWrap');
+    if(w){ w.classList.remove('flex'); w.classList.add('block'); w.style.height='auto'; }
+    const h=document.getElementById('splitHandle');
+    if(h){ h.style.display='none'; }
+    const d=document.getElementById('dirPane');
+    if(d){ d.style.width='100%'; }
+  }catch(e){}
 }
+
+// ---- splitter (desktop) ----
+(function initSplitter(){
+  const wrap=document.getElementById('splitWrap');
+  const handle=document.getElementById('splitHandle');
+  const dirPane=document.getElementById('dirPane');
+  if(!wrap||!handle||!dirPane) return;
+  const key='strm115_split_w';
+  try{
+    const saved=localStorage.getItem(key);
+    if(saved){ dirPane.style.width = saved; }
+  }catch(e){}
+
+  let dragging=false;
+  handle.addEventListener('mousedown', (ev)=>{
+    dragging=true;
+    document.body.style.cursor='col-resize';
+    ev.preventDefault();
+  });
+  window.addEventListener('mousemove', (ev)=>{
+    if(!dragging) return;
+    const rect=wrap.getBoundingClientRect();
+    const x=ev.clientX-rect.left;
+    const w=Math.max(220, Math.min(rect.width-260, x));
+    const pct=(w/rect.width*100).toFixed(1)+'%';
+    dirPane.style.width = pct;
+  });
+  window.addEventListener('mouseup', ()=>{
+    if(!dragging) return;
+    dragging=false;
+    document.body.style.cursor='';
+    try{ localStorage.setItem(key, dirPane.style.width); }catch(e){}
+  });
+})();
 
 function escapeHtml(str){
   return String(str).replace(/[&<>\"]/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[s]));
