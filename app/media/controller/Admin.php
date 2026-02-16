@@ -2595,4 +2595,14 @@ $base = rtrim($baseUrl, '/');
         return json(['code'=>200,'data'=>['url'=>$url,'ts'=>$ts]]);
     }
 
+
+    // GET /media/admin/strm115Browser
+    public function strm115Browser()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        return view('admin/strm115_browser');
+    }
+
 }
