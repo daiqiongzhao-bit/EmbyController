@@ -82,23 +82,71 @@ class Strm115 extends BaseController
         }
         return [isset($m[(string)$fileId]), $rootCid];
     }
+
+
+    private function sign_make($secret, $fileId, $pickcode, $ts)
+    {
+        $base = (string)$fileId . '|' . (string)$pickcode . '|' . (string)$ts;
+        return hash_hmac('sha256', $base, (string)$secret);
+    }
+
+    private function sign_check($secret, $fileId, $pickcode)
+    {
+        $ts = (string)input('ts', '');
+        $sig = (string)input('sig', '');
+        if ($ts === '' || $sig === '') {
+            return [false, 'missing'];
+        }
+        if (!ctype_digit($ts)) {
+            return [false, 'bad_ts'];
+        }
+        $ttl = (int)$this->cfg_get('play_sig_ttl', '600');
+        if ($ttl <= 0) $ttl = 600;
+        $now = time();
+        $t = (int)$ts;
+        if (abs($now - $t) > $ttl) {
+            return [false, 'expired'];
+        }
+        $calc = $this->sign_make($secret, $fileId, $pickcode, $ts);
+        if (!hash_equals($calc, $sig)) {
+            return [false, 'bad_sig'];
+        }
+        return [true, 'ok'];
+    }
     // GET /media/strm115/redirect?fileId=...&pickcode=...&token=...
     // Returns 302 to direct link
     public function redirect()
     {
         $secret = $this->cfg_get('play_secret', '');
+        $sigEnabled = ((string)$this->cfg_get('play_sig_enabled', '0') === '1');
+        $allowLegacy = ((string)$this->cfg_get('play_sig_allow_legacy', '1') === '1');
         $got = (string)input('token', '');
+
+        $fileId = (string)input('fileId', '');
+        $pickcode = (string)input('pickcode', '');
 
         // allow admin session bypass (manual testing)
         $isAdmin = (session('r_user') != null && (int)session('r_user')['authority'] === 0);
         if (!$isAdmin) {
-            if ($secret === '' || $got === '' || !hash_equals($secret, $got)) {
+            if ($secret === '') {
                 return response('forbidden', 403);
             }
+            if ($sigEnabled) {
+                [$ok, $why] = $this->sign_check($secret, $fileId, $pickcode);
+                if (!$ok) {
+                    if ($allowLegacy && $got !== '' && hash_equals($secret, $got)) {
+                        // legacy ok
+                    } else {
+                        $this->audit_log(['event'=>'redirect_forbidden_sig','fileId'=>$fileId,'pickcode'=>$pickcode,'ip'=>Request::ip(),'why'=>$why]);
+                        return response('forbidden', 403);
+                    }
+                }
+            } else {
+                if ($got === '' || !hash_equals($secret, $got)) {
+                    return response('forbidden', 403);
+                }
+            }
         }
-
-        $fileId = (string)input('fileId', '');
-        $pickcode = (string)input('pickcode', '');
         if ($fileId === '' && $pickcode === '') {
             return response('bad request', 400);
         }

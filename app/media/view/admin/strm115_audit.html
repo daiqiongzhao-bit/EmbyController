@@ -1,0 +1,72 @@
+{include file="public/_header" /}
+
+<div class="flex-1 p-6">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-2xl font-bold">115 播放审计日志</h1>
+      <div class="text-xs text-gray-400">当前版本：<?php echo env('APP_VERSION','unknown'); ?></div>
+    </div>
+
+    <div class="bg-black/20 border border-white/10 rounded p-4 mb-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label class="block text-sm text-gray-300 mb-1">日期（YYYYMMDD）</label>
+          <input id="auditDate" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如 20260216" value="<?php echo date('Ymd'); ?>" />
+        </div>
+        <div>
+          <label class="block text-sm text-gray-300 mb-1">包含 fileId（可选）</label>
+          <input id="auditFileId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="fileId" value="" />
+        </div>
+        <div>
+          <label class="block text-sm text-gray-300 mb-1">事件（可选）</label>
+          <select id="auditEvent" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10">
+            <option value="">全部</option>
+            <option value="redirect_ok">redirect_ok</option>
+            <option value="redirect_block">redirect_block</option>
+            <option value="redirect_no_url">redirect_no_url</option>
+            <option value="redirect_upstream_error">redirect_upstream_error</option>
+          </select>
+        </div>
+        <div class="flex items-end gap-2">
+          <button id="btnLoad" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">加载</button>
+          <a id="btnDownload" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20" href="#" target="_blank">下载原始日志</a>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">说明：日志为 JSONL，每行一条。若你发现日志为空，先触发一次播放/拦截再刷新。</p>
+    </div>
+
+    <div class="bg-black/20 border border-white/10 rounded p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-sm text-gray-400">最近 500 行（过滤后）</div>
+        <div class="text-xs text-gray-500" id="auditMeta"></div>
+      </div>
+      <pre id="auditPre" class="text-xs whitespace-pre-wrap break-words leading-relaxed" style="min-height:260px"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+async function getJson(url){
+  const r = await fetch(url, {credentials:'include'});
+  return await r.json();
+}
+function esc(s){return (s||'').toString().replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+async function loadAudit(){
+  const d = document.getElementById('auditDate').value.trim();
+  const fileId = document.getElementById('auditFileId').value.trim();
+  const ev = document.getElementById('auditEvent').value;
+  const qs = new URLSearchParams({date:d, fileId, event:ev}).toString();
+  const url = '/media/admin/strm115AuditData?' + qs;
+  const j = await getJson(url);
+  if (!j || j.code !== 200) {
+    document.getElementById('auditPre').textContent = (j && j.message) ? j.message : '加载失败';
+    return;
+  }
+  document.getElementById('auditMeta').textContent = `lines=${j.data.lines} filtered=${j.data.filtered}`;
+  document.getElementById('auditPre').textContent = j.data.text || '';
+  document.getElementById('btnDownload').href = '/media/admin/strm115AuditDownload?date=' + encodeURIComponent(d);
+}
+
+document.getElementById('btnLoad').addEventListener('click', loadAudit);
+loadAudit();
+</script>

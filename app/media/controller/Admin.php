@@ -2439,4 +2439,72 @@ $base = rtrim($baseUrl, '/');
         return json(['code' => 200, 'data' => ['rootCid' => $rootCid]]);
     }
 
+
+    // GET /media/admin/strm115Audit  (page)
+    public function strm115Audit()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        return view('admin/strm115_audit');
+    }
+
+    // GET /media/admin/strm115AuditDownload?date=YYYYMMDD
+    public function strm115AuditDownload()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $date = preg_replace('/[^0-9]/', '', (string)input('date', date('Ymd')));
+        if ($date === '') $date = date('Ymd');
+        $auditDir = $this->strm115_cfg_get('audit_dir', '/app/runtime/media/strm115/audit');
+        $path = rtrim($auditDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $date . '.log';
+        if (!is_file($path)) {
+            return response('not found', 404);
+        }
+        header('content-type: text/plain; charset=utf-8');
+        header('content-disposition: attachment; filename="strm115_audit_' . $date . '.log"');
+        readfile($path);
+        exit;
+    }
+
+    // GET /media/admin/strm115AuditData?date=YYYYMMDD&fileId=&event=
+    public function strm115AuditData()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $date = preg_replace('/[^0-9]/', '', (string)input('date', date('Ymd')));
+        if ($date === '') $date = date('Ymd');
+        $fileId = trim((string)input('fileId', ''));
+        $event = trim((string)input('event', ''));
+
+        $auditDir = $this->strm115_cfg_get('audit_dir', '/app/runtime/media/strm115/audit');
+        $path = rtrim($auditDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $date . '.log';
+        if (!is_file($path)) {
+            return json(['code' => 404, 'message' => '日志不存在：' . $date]);
+        }
+        $lines = @file($path, FILE_IGNORE_NEW_LINES);
+        if (!is_array($lines)) $lines = [];
+        $lines = array_slice($lines, max(0, count($lines) - 500));
+
+        $out = [];
+        $filtered = 0;
+        foreach ($lines as $ln) {
+            $ok = true;
+            if ($event !== '' && strpos($ln, '"event":"' . $event . '"') === false) $ok = false;
+            if ($fileId !== '' && strpos($ln, '"fileId":"' . $fileId . '"') === false && strpos($ln, '"fileId":' . $fileId) === false) $ok = false;
+            if ($ok) {
+                $out[] = $ln;
+                $filtered++;
+            }
+        }
+
+        return json(['code' => 200, 'data' => [
+            'lines' => count($lines),
+            'filtered' => $filtered,
+            'text' => implode("\n", $out),
+        ]]);
+    }
+
 }
