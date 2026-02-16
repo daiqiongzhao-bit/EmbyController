@@ -9,7 +9,6 @@
       </div>
       <div class="flex items-center gap-2">
         <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshStatus()">刷新状态</button>
-        <a class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" href="/media/admin/strm115Browser">目录浏览/生成STRM</a>
       </div>
     </div>
 
@@ -21,12 +20,12 @@
           <div class="text-[11px] text-gray-500 mt-1" id="stExp">-</div>
         </div>
         <div class="bg-black/20 border border-white/10 rounded p-4">
-          <div class="text-xs text-gray-500">Access Token</div>
-          <div class="text-sm mt-1" id="stAccess">-</div>
+          <div class="text-xs text-gray-500">Access Token（已脱敏）</div>
+          <div class="text-sm mt-1 truncate" id="stAccess" title="">-</div>
         </div>
         <div class="bg-black/20 border border-white/10 rounded p-4">
-          <div class="text-xs text-gray-500">Refresh Token</div>
-          <div class="text-sm mt-1" id="stRefresh">-</div>
+          <div class="text-xs text-gray-500">Refresh Token（已脱敏）</div>
+          <div class="text-sm mt-1 truncate" id="stRefresh" title="">-</div>
         </div>
         <div class="bg-black/20 border border-white/10 rounded p-4">
           <div class="text-xs text-gray-500">播放安全</div>
@@ -113,8 +112,14 @@ async function refreshStatus(){
   const d=j.data||{};
   document.getElementById('stAuth').textContent = d.authorized ? '已授权' : '未授权';
   document.getElementById('stExp').textContent = d.expires_at ? ('过期时间：'+d.expires_at) : '';
-  document.getElementById('stAccess').textContent = d.access_masked || '-';
-  document.getElementById('stRefresh').textContent = d.refresh_masked || '-';
+  const a=(d.access_masked || '-');
+  const r=(d.refresh_masked || '-');
+  const ea=document.getElementById('stAccess');
+  const er=document.getElementById('stRefresh');
+  ea.textContent = a;
+  er.textContent = r;
+  ea.title = a;
+  er.title = r;
   document.getElementById('stSig').textContent = d.play_sig_enabled==='1' ? ('签名校验：开（TTL='+ (d.play_sig_ttl||'') +'秒）') : '签名校验：关';
 }
 

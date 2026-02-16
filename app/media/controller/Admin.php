@@ -2841,8 +2841,8 @@ $base = rtrim($baseUrl, '/');
         $mask = function($t){
             $t = (string)$t;
             if ($t === '') return '';
-            if (strlen($t) <= 10) return str_repeat('*', strlen($t));
-            return substr($t,0,5).str_repeat('*', strlen($t)-10).substr($t,-5);
+            if (strlen($t) <= 10) return '***';
+            return substr($t,0,5) . '...' . substr($t,-5);
         };
 
         return json(['code'=>200,'data'=>[
