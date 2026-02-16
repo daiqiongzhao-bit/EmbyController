@@ -12,31 +12,32 @@
         <div class="bg-black/20 border border-white/10 rounded p-4">
           <div class="text-sm text-gray-300 mb-2">签名模式（ts+sig，带有效期）</div>
           <div class="space-y-2 text-sm">
-            <label class="flex items-center gap-2"><input type="checkbox" id="sigEnabled" /> 启用签名校验（play_sig_enabled=1）</label>
-            <label class="flex items-center gap-2"><input type="checkbox" id="sigLegacy" /> 允许旧 token=play_secret 兜底（play_sig_allow_legacy=1）</label>
+            <label class="flex items-center gap-2"><input type="checkbox" id="sigEnabled" /> 启用签名校验（更安全）</label>
+            <label class="flex items-center gap-2"><input type="checkbox" id="sigLegacy" /> 兼容旧链接（不让旧 STRM 立刻失效）</label>
+            <div class="text-[11px] text-gray-500">高级说明：play_sig_enabled / play_sig_allow_legacy</div>
             <div>
-              <label class="block text-gray-300 mb-1">有效期 TTL（秒）</label>
+              <label class="block text-gray-300 mb-1">链接有效期（秒）</label>
               <input id="sigTtl" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如 600" />
-              <p class="text-xs text-gray-500 mt-1">说明：签名校验使用 now 与 ts 的时间差，超过 TTL 拒绝。</p>
+              <p class="text-xs text-gray-500 mt-1">超过有效期后，播放跳转会被拒绝（防止链接被长期传播）。</p>
             </div>
             <div class="flex gap-2 pt-2">
               <button id="btnSaveSig" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500">保存</button>
-              <button id="btnLoadSig" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20">刷新当前值</button>
-              <a class="px-4 py-2 rounded bg-white/10 hover:bg-white/20" href="/media/admin/strm115Audit" target="_blank">查看审计日志</a>
+              <button id="btnLoadSig" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20">刷新</button>
             </div>
           </div>
         </div>
 
         <div class="bg-black/20 border border-white/10 rounded p-4">
-          <div class="text-sm text-gray-300 mb-2">生成临时播放链接（用于分享/测试）</div>
+          <div class="text-sm text-gray-300 mb-2">生成临时播放链接（分享/测试）</div>
           <div class="space-y-2 text-sm">
             <div>
-              <label class="block text-gray-300 mb-1">fileId</label>
-              <input id="tmpFileId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="115 fileId" />
+              <label class="block text-gray-300 mb-1">115 文件编号（fileId）</label>
+              <input id="tmpFileId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="从目录列表复制 fileId" />
             </div>
             <div>
-              <label class="block text-gray-300 mb-1">baseUrl（可选）</label>
-              <input id="tmpBaseUrl" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如 https://your.domain" />
+              <label class="block text-gray-300 mb-1">外网访问地址（可选）</label>
+              <input id="tmpBaseUrl" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如 https://你的域名" />
+              <p class="text-[11px] text-gray-500 mt-1">留空则默认使用当前访问域名。</p>
             </div>
             <div class="flex gap-2 pt-2">
               <button id="btnGenTmp" class="px-4 py-2 rounded bg-green-600 hover:bg-green-500">生成临时链接</button>

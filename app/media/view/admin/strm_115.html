@@ -4,8 +4,8 @@
 <div class="flex-1 p-6">
   <div class="max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">115 插件化（整合版）</h1><a class="text-xs text-blue-400 underline ml-3" href="/media/admin/strm115Audit" target="_blank">审计日志</a> | <a class="text-blue-400 underline" href="/media/admin/strm115Security" target="_blank">安全配置</a> | <a class="text-blue-400 underline" href="/media/admin/strm115Browser" target="_blank">目录浏览/生成STRM</a>
-      <a class="text-blue-400 underline" href="/media/admin/strm">返回 STRM</a>
+      <h1 class="text-2xl font-bold">115 功能配置</h1>
+      <div class="text-xs text-gray-400">当前版本：<?php echo env('APP_VERSION','unknown'); ?></div>
     </div>
 
     <div class="bg-white/5 rounded-xl p-6 space-y-4">
@@ -20,15 +20,17 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm text-gray-300 mb-1">启用 115 Provider</label>
+          <label class="block text-sm text-gray-300 mb-1">启用 115 功能</label>
           <label class="flex items-center gap-2">
             <input id="en" type="checkbox" class="accent-blue-500" {if isset($cfg.enabled) && $cfg.enabled==1}checked{/if} />
-            <span class="text-sm text-gray-300">enabled</span>
+            <span class="text-sm text-gray-300">开启 / 关闭</span>
           </label>
+          <p class="text-xs text-gray-500 mt-1">关闭后不显示 115 相关功能入口与页面。</p>
         </div>
         <div>
-          <label class="block text-sm text-gray-300 mb-1">默认根目录 CID（可选）</label>
-          <input id="rootCid" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：0" value="{$cfg.root_cid|default=''}" />
+          <label class="block text-sm text-gray-300 mb-1">默认根目录（CID，可选）</label>
+          <input id="rootCid" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：0（根目录）" value="{$cfg.root_cid|default=''}" />
+          <p class="text-xs text-gray-500 mt-1">用于限制/定位默认浏览目录。留空则从根目录开始。</p>
         </div>
       </div>
 
@@ -47,17 +49,18 @@
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-black/20 border border-white/10 rounded p-4">
-          <div class="text-sm text-gray-300 mb-2">B2 扫码登录（PKCE）</div>
+          <div class="text-sm text-gray-300 mb-2">扫码授权（115 开放平台 / B2）</div>
           <div class="space-y-2">
             <div>
-              <label class="block text-sm text-gray-300 mb-1">Client ID（115 开放平台）</label>
-              <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="请输入 client_id" />
+              <label class="block text-sm text-gray-300 mb-1">应用ID（client_id，可手动输入）</label>
+              <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：100195137" />
+              <p class="text-xs text-gray-500 mt-1">就是你之前那串 10019xxxx（VIDHUB、网易爆米花等）。</p>
             </div>
             <div>
-              <label class="block text-sm text-gray-300 mb-1">名称（可选）</label>
+              <label class="block text-sm text-gray-300 mb-1">设备名称（可选）</label>
               <input id="b2Name" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：我的115" value="115" />
             </div>
-            <div class="text-xs text-gray-400">点击“生成二维码(B2)”后，用 115 App 扫码并确认，然后点“完成授权”。</div>
+            <div class="text-xs text-gray-400">流程：生成二维码 → 115 App 扫码并确认 → 点击“完成授权”。</div>
           </div>
         </div>
         <div class="bg-black/20 border border-white/10 rounded p-4">

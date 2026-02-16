@@ -18,13 +18,13 @@
           <input id="auditFileId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="fileId" value="" />
         </div>
         <div>
-          <label class="block text-sm text-gray-300 mb-1">事件（可选）</label>
+          <label class="block text-sm text-gray-300 mb-1">事件类型（可选）</label>
           <select id="auditEvent" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10">
             <option value="">全部</option>
-            <option value="redirect_ok">redirect_ok</option>
-            <option value="redirect_block">redirect_block</option>
-            <option value="redirect_no_url">redirect_no_url</option>
-            <option value="redirect_upstream_error">redirect_upstream_error</option>
+            <option value="redirect_ok">✅ 播放成功（redirect_ok）</option>
+            <option value="redirect_block">⛔ 越权拦截（redirect_block）</option>
+            <option value="redirect_no_url">⚠️ 未拿到直链（redirect_no_url）</option>
+            <option value="redirect_upstream_error">❌ 上游异常（redirect_upstream_error）</option>
           </select>
         </div>
         <div class="flex items-end gap-2">
