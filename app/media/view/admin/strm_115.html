@@ -131,8 +131,16 @@
     </div>
 
     <div class="mt-4">
-      <div class="text-sm text-gray-300 mb-2">文件列表</div>
-      <div id="fileList" class="max-h-[380px] overflow-auto border border-white/10 rounded-lg bg-black/20 p-2"></div>
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-sm text-gray-300">文件列表</div>
+        <div class="text-xs text-gray-400" id="crumb"></div>
+      </div>
+      <div class="flex items-center gap-2 mb-2">
+        <button class="px-3 py-1 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-xs" onclick="navUp115()">返回上级</button>
+        <button class="px-3 py-1 rounded bg-black/40 border border-white/10 hover:bg-black/30 text-xs" onclick="navRoot115()">回到根目录</button>
+        <span class="text-xs text-gray-500">（点击文件夹可进入）</span>
+      </div>
+      <div id="fileList" class="max-h-[420px] overflow-auto border border-white/10 rounded-lg bg-black/20 p-1 text-sm"></div>
     </div>
   </div>
 </div>
@@ -252,6 +260,7 @@ document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
 
 // ----- v013: 115 list + strm gen -----
 let _115_items = [];
+let _115_nav = []; // breadcrumb stack: [{cid,name}]
 
 function normItem(raw){
   // try common field names
@@ -263,6 +272,53 @@ function normItem(raw){
     isDir: !!isDir,
     size: raw.size ?? raw.fs ?? ''
   };
+}
+
+
+function setCrumb115(){
+  const el=document.getElementById('crumb');
+  if(!el) return;
+  const root = document.getElementById('rootCid115').value.trim() || '0';
+  if(!_115_nav.length){
+    el.textContent = `当前CID: ${document.getElementById('cid').value.trim()}（rootCid: ${root||'-'}）`;
+    return;
+  }
+  const parts = _115_nav.map(x=>x.name||x.cid);
+  el.textContent = parts.join(' / ');
+}
+
+function navTo115(cid, name){
+  document.getElementById('cid').value = String(cid);
+  document.getElementById('offset').value = '0';
+  if(name){
+    _115_nav.push({cid:String(cid), name:String(name)});
+  } else {
+    _115_nav.push({cid:String(cid), name:String(cid)});
+  }
+  load115List();
+}
+
+function navRoot115(){
+  _115_nav = [];
+  const root = document.getElementById('rootCid115').value.trim();
+  document.getElementById('cid').value = root || '0';
+  document.getElementById('offset').value = '0';
+  load115List();
+}
+
+function navUp115(){
+  if(_115_nav.length){
+    _115_nav.pop();
+  }
+  if(_115_nav.length){
+    const last=_115_nav[_115_nav.length-1];
+    document.getElementById('cid').value = last.cid;
+  } else {
+    const root = document.getElementById('rootCid115').value.trim();
+    document.getElementById('cid').value = root || '0';
+  }
+  document.getElementById('offset').value = '0';
+  load115List();
 }
 
 async function load115List(){
@@ -292,32 +348,57 @@ async function load115List(){
   document.getElementById('listSummary').textContent = `共 ${_115_items.length} 项（文件夹 ${dirs}，文件 ${files}）`;
 
   render115List();
+  setCrumb115();
 }
 
 function render115List(){
   const box = document.getElementById('fileList');
   box.innerHTML = '';
   if (!_115_items.length) {
-    box.innerHTML = '<div class="text-sm text-gray-500 p-2">暂无数据</div>';
+    box.innerHTML = '<div class="text-xs text-gray-500 p-2">暂无数据</div>';
     return;
   }
-  for (const it of _115_items) {
+
+  // dirs first
+  const dirs = _115_items.filter(x=>x.isDir);
+  const files = _115_items.filter(x=>!x.isDir);
+
+  const mkRow = (html) => {
     const row = document.createElement('div');
     row.className = 'flex items-center gap-2 px-2 py-1 hover:bg-white/5 rounded';
+    row.innerHTML = html;
+    return row;
+  };
 
-    if (it.isDir) {
-      row.innerHTML = `<span class="text-xs text-gray-400">📁</span><span class="text-sm text-gray-200">${escapeHtml(it.name)}</span><span class="text-xs text-gray-500 ml-auto">cid?（目录不生成strm）</span>`;
-    } else {
-      row.innerHTML = `
-        <input class="accent-blue-500" type="checkbox" data-fileid="${escapeHtml(it.fileId)}" data-name="${escapeHtml(it.name)}" />
-        <span class="text-sm text-gray-200">${escapeHtml(it.name)}</span>
-        <span class="text-xs text-gray-500 ml-auto">${escapeHtml(it.fileId)}</span>
-      `;
-    }
+  for (const it of dirs) {
+    const row = mkRow(`
+      <button class="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入" data-cid="${escapeHtml(it.fileId)}">进入</button>
+      <span class="text-gray-400">📁</span>
+      <span class="text-sm text-gray-200 truncate" style="max-width:520px">${escapeHtml(it.name)}</span>
+      <span class="text-[11px] text-gray-600 ml-auto">${escapeHtml(it.fileId)}</span>
+    `);
+    row.querySelector('button').addEventListener('click', ()=>navTo115(it.fileId, it.name));
+    // click anywhere on row (except button) also navigates
+    row.addEventListener('dblclick', ()=>navTo115(it.fileId, it.name));
+    box.appendChild(row);
+  }
+
+  if (dirs.length && files.length) {
+    const sep = document.createElement('div');
+    sep.className = 'my-2 border-t border-white/10';
+    box.appendChild(sep);
+  }
+
+  for (const it of files) {
+    const row = mkRow(`
+      <input class="accent-blue-500" type="checkbox" data-fileid="${escapeHtml(it.fileId)}" data-name="${escapeHtml(it.name)}" />
+      <span class="text-gray-400">🎬</span>
+      <span class="text-sm text-gray-200 truncate" style="max-width:560px">${escapeHtml(it.name)}</span>
+      <span class="text-[11px] text-gray-600 ml-auto">${escapeHtml(it.fileId)}</span>
+    `);
     box.appendChild(row);
   }
 }
-
 function selectAll115(on){
   const box = document.getElementById('fileList');
   box.querySelectorAll('input[type=checkbox]').forEach(cb=>{cb.checked=!!on;});
@@ -352,6 +433,13 @@ async function gen115Strm(){
   document.getElementById('genSummary').textContent = `已生成 ${r.data.count} 个，输出目录：${outDir}`;
   appendLog('gen115: '+JSON.stringify(r));
 }
+
+document.getElementById('rootCid115').addEventListener('change', ()=>{
+  const v=document.getElementById('rootCid115').value.trim();
+  if(v){ document.getElementById('cid').value=v; }
+  _115_nav=[];
+  setCrumb115();
+});
 
 function escapeHtml(str){
   return String(str).replace(/[&<>"]/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[s]));
