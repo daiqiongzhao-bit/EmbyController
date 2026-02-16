@@ -165,13 +165,26 @@ class Index extends BaseController
                 $ch = curl_init($url);
                 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 8);
                 curl_setopt($ch, CURLOPT_HTTPHEADER, [
                     'accept: application/json'
                 ]);
                 $latestMedia = curl_exec($ch);
-                Cache::set('latestMedia-'.$embyUserId, $latestMedia, 600);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlErr = curl_error($ch);
+                curl_close($ch);
+
+                // only cache successful payload
+                if ($latestMedia !== false && $httpCode >= 200 && $httpCode < 300) {
+                    Cache::set('latestMedia-'.$embyUserId, $latestMedia, 600);
+                } else {
+                    return json(['code' => 500, 'message' => '获取 Emby 最新内容失败', 'httpCode' => $httpCode, 'error' => $curlErr]);
+                }
             }
-            return json(['code' => 200, 'latestMedia' => json_decode($latestMedia, true)]);
+            $arr = json_decode($latestMedia, true);
+            if (!is_array($arr)) $arr = [];
+            return json(['code' => 200, 'latestMedia' => $arr]);
         }
     }
 

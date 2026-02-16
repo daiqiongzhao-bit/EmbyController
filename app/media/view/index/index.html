@@ -354,9 +354,10 @@
         $.ajax({
             url: '/media/index/getLatestMedia',
             type: 'POST',
+            timeout: 9000,
             success: function (data) {
                 var inner = "";
-                if (data.code === 200) {
+                if (data && data.code === 200 && Array.isArray(data.latestMedia) && data.latestMedia.length) {
                     const mediaList = data.latestMedia;
                     mediaList.forEach((media, i) => {
                         inner += `<div class="w-[180px] md:w-[200px] flex-none snap-start" onclick="window.location.href='/media/user/commentDetail?id=${media.Id}'">`;
@@ -377,12 +378,19 @@
                         inner += `</div></div></div>`;
                     });
                 } else {
-                    inner += `<div class="w-full flex justify-center items-center">`;
-                    inner += `<h3 class="text-lg font-semibold text-white/80">暂无最新内容</h3>`;
-                    inner += `</div>`;
+                    const msg = (data && data.message) ? data.message : '暂无最新内容（或 Emby 暂不可用）';
+                    inner += `<div class="w-full flex justify-center items-center" style="height: 332px">`;
+                    inner += `<div class="text-center">`;
+                    inner += `<div class="text-sm text-white/80">${msg}</div>`;
+                    inner += `<div class="mt-2 text-xs text-white/50">你可以稍后刷新页面再试</div>`;
+                    inner += `</div></div>`;
                 }
                 document.querySelector('.latest-movies-here').innerHTML = inner;
                 document.getElementById('latest-update-loading').style.display = 'none';
+            },
+            error: function(){
+                document.getElementById('latest-update-loading').style.display = 'none';
+                document.querySelector('.latest-movies-here').innerHTML = `<div class="w-full flex justify-center items-center" style="height: 332px"><div class="text-center"><div class="text-sm text-white/80">加载超时或网络异常</div><div class="mt-2 text-xs text-white/50">请稍后刷新再试</div></div></div>`;
             }
         });
         $.ajax({
