@@ -30,7 +30,8 @@
 
       <div>
         <label class="block text-sm text-gray-300 mb-1">后缀（逗号分隔）</label>
-        <input id="exts" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="mkv,mp4,avi" value="{$defaultExts|default='mkv,mp4,avi,mov,m4v'}" />
+        <input id="exts" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：mkv,mp4" value="{$defaultExts|default='mkv,mp4,avi,m4v,mov,wmv,flv,mpg,mpeg,rm,rmvb,vob,ts,tp,webm'}" />
+        <p class="text-xs text-gray-400 mt-1">默认已填常用视频后缀；你可以按需增减（不区分大小写）。</p>
       </div>
 
       <div class="flex items-center gap-4">
