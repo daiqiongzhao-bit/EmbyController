@@ -2437,6 +2437,17 @@ private function strm115_session_dir()
         if (!$ok) {
             return json(['code' => 500, 'message' => '115请求失败：' . $raw]);
         }
+        if ($http >= 400) {
+            $msg = '';
+            if (is_array($j)) {
+                $msg = (string)($j['message'] ?? $j['msg'] ?? $j['error'] ?? '');
+            }
+            $tail = $msg !== '' ? ('：' . $msg) : '';
+            return json(['code' => 500, 'message' => '115接口返回异常 HTTP ' . $http . $tail]);
+        }
+        if (!is_array($j)) {
+            return json(['code' => 500, 'message' => '115接口返回异常：非JSON']);
+        }
         // cache pickcode for later use
         try {
             if (is_array($j) && isset($j['data']['data']) && is_array($j['data']['data'])) {
