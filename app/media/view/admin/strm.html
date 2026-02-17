@@ -5,7 +5,7 @@
   <div class="max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">STRM 生成器</h1>
-      <div class="text-xs text-gray-400 mt-1">302直链与CloudDrive2 webhook 默认关闭：<a class="text-blue-400 underline" href="/media/admin/strmEvents" target="_blank">事件列表</a> | <a class="text-blue-400 underline" href="/media/admin/strm115" target="_blank">115 配置</a></div>
+      <div class="text-xs text-gray-400 mt-1">302直链与CloudDrive2 webhook 默认关闭：<a class="text-blue-400 underline" href="/media/admin/strmWebhook" target="_blank">Webhook配置</a> | <a class="text-blue-400 underline" href="/media/admin/strmEvents" target="_blank">事件列表</a> | <a class="text-blue-400 underline" href="/media/admin/strm115" target="_blank">115 配置</a></div>
     </div>
 
     <div class="bg-white/5 rounded-xl p-6 space-y-4">
@@ -73,41 +73,12 @@
     
 
     <div class="bg-white/5 rounded-xl p-4 mt-4 space-y-2">
-      <div class="text-sm text-gray-200 font-medium">STRM 扩展设置（高级）</div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs text-gray-300 mb-1">Webhook Token（可留空=不鉴权）</label>
-          <input id="whToken" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="建议随便填一串" />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-300 mb-1">去重窗口(秒)</label>
-          <input id="whDedupe" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="120" />
-        </div>
-        <div>
-          <label class="flex items-center gap-2 mt-1">
-            <input id="whEnable" type="checkbox" class="accent-blue-500" />
-            <span class="text-sm text-gray-300">启用 CloudDrive2 Webhook 接收</span>
-          </label>
-        </div>
-        <div>
-          <label class="flex items-center gap-2 mt-1">
-            <input id="whTrigger" type="checkbox" class="accent-blue-500" />
-            <span class="text-sm text-gray-300">Webhook 自动触发生成任务（需要已保存 src/out/baseUrl）</span>
-          </label>
-        </div>
-        <div>
-          <label class="block text-xs text-gray-300 mb-1">302 直链 base（示例：https://cdn.example.com）</label>
-          <input id="rdBase" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="https://example.com" />
-        </div>
-        <div>
-          <label class="flex items-center gap-2 mt-6">
-            <input id="rdEnable" type="checkbox" class="accent-blue-500" />
-            <span class="text-sm text-gray-300">启用 302 直链</span>
-          </label>
-        </div>
+      <div class="flex items-center justify-between">
+        <div class="text-sm text-gray-200 font-medium">Webhook / 集成配置</div>
+        <a class="text-blue-400 underline text-sm" href="/media/admin/strmWebhook" target="_blank">打开配置页</a>
       </div>
-      <div>
-        <button id="btnSaveSettings" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">保存设置</button>
+      <div class="text-xs text-gray-400">
+        统一管理 CloudDrive2 Webhook（开关/Token/去重/自动触发）与 302 直链，并可一键复制配置片段；同时预留 MP2 入口。
       </div>
     </div>
 

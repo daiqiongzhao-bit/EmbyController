@@ -1,0 +1,467 @@
+{include file="public/_header" /}
+
+<div class="flex-1 p-6">
+  <div class="max-w-5xl mx-auto space-y-6">
+
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold">Webhook / 集成配置</h1>
+        <div class="text-xs text-gray-400 mt-1">统一管理 CloudDrive2 Webhook（开关/Token/去重/自动触发）与 302 直链；并与事件列表联动；预留 MP2 同模块入口。</div>
+      </div>
+      <div class="text-sm">
+        <a class="text-blue-400 underline" href="/media/admin/strm" >返回 STRM</a>
+        <span class="text-gray-500 mx-2">|</span>
+        <a class="text-blue-400 underline" href="/media/admin/strmEvents" target="_blank">事件列表</a>
+      </div>
+    </div>
+
+
+    <div class="bg-white/5 rounded-xl p-5 space-y-4">
+      <div class="flex items-center gap-3">
+        <button id="tabCloudDrive2" class="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 transition text-sm">CloudDrive2</button>
+        <button id="tabMP2" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm">MoviePilot2</button>
+        <div class="flex-1"></div>
+        <span class="text-xs text-gray-400">Film Fusion 风格：配置 + 可复制片段 + 状态联动</span>
+      </div>
+
+      <!-- CloudDrive2 Panel -->
+      <div id="panelCloudDrive2" class="space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="bg-black/20 border border-white/10 rounded-xl p-4 lg:col-span-2">
+            <div class="text-sm text-gray-200 font-medium mb-3">CloudDrive2 Webhook</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="md:col-span-2">
+                <label class="flex items-center gap-2">
+                  <input id="cd2Enable" type="checkbox" class="accent-blue-500" />
+                  <span class="text-sm text-gray-300">启用 Webhook 接收（POST /media/strm/cloudDrive2Webhook）</span>
+                </label>
+                <div class="text-xs text-gray-400 mt-1">关闭时接口直接返回 403（防止误触发）。</div>
+              </div>
+
+              <div>
+                <label class="block text-xs text-gray-300 mb-1">Webhook Token（可留空=不鉴权）</label>
+                <input id="cd2Token" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="建议随机一串" />
+                <div class="text-xs text-gray-400 mt-1">发送端可用 Header: <code>X-Webhook-Token</code> 或 query <code>?token=</code>。</div>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-300 mb-1">去重窗口(秒)</label>
+                <input id="cd2Dedupe" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" />
+                <div class="text-xs text-gray-400 mt-1">相同内容在窗口内重复上报会被忽略（返回 ok+deduped）。</div>
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="flex items-center gap-2">
+                  <input id="cd2Trigger" type="checkbox" class="accent-blue-500" />
+                  <span class="text-sm text-gray-300">Webhook 自动触发生成任务</span>
+                </label>
+                <div class="text-xs text-gray-400 mt-1">需要已在 STRM 页保存 <code>src/out/baseUrl</code>（否则只落盘事件，不会创建任务）。</div>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="bg-black/25 border border-white/10 rounded-lg p-3">
+                <div class="text-xs text-gray-400">Webhook URL</div>
+                <div class="mt-1 font-mono text-xs text-gray-200 break-all" id="cd2Url"></div>
+                <div class="mt-2 flex gap-2">
+                  <button id="btnCopyUrl" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm">复制 URL</button>
+                  <button id="btnCopyCurl" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm">复制 curl</button>
+                  <button id="btnTestWebhook" class="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 transition text-sm">发送测试事件</button>
+                </div>
+                <div class="text-xs text-gray-500 mt-2">测试事件会写入 runtime/strm/events/，可在右侧看到联动状态。</div>
+              </div>
+
+              <div class="bg-black/25 border border-white/10 rounded-lg p-3">
+                <div class="text-xs text-gray-400">可复制配置片段</div>
+                <pre class="mt-1 text-xs text-gray-200 overflow-auto whitespace-pre-wrap" id="cd2Snippet"></pre>
+                <div class="mt-2">
+                  <button id="btnCopySnippet" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm">复制片段</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 flex items-center gap-3">
+              <button id="btnSave" class="px-4 py-2 rounded bg-green-600 hover:bg-green-500 transition">保存配置</button>
+              <span id="saveStatus" class="text-sm text-gray-300"></span>
+            </div>
+          </div>
+
+          <div class="bg-black/20 border border-white/10 rounded-xl p-4">
+            <div class="text-sm text-gray-200 font-medium mb-3">事件联动</div>
+            <div class="text-xs text-gray-400">已落盘事件文件：<span class="text-gray-200">{$eventFileCount|default=0}</span></div>
+            {if isset($latestEventFile) && $latestEventFile}
+            <div class="text-xs text-gray-400 mt-2">最新：
+              <a class="text-blue-400 underline" target="_blank" href="/media/admin/strmEventFile?file={$latestEventFile}">{$latestEventFile}</a>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">mtime：{$latestEventMtime|default=''}</div>
+            {/if}
+
+            <div class="mt-3 text-xs text-gray-300">最近 10 个文件：</div>
+            {if isset($eventFiles) && $eventFiles}
+            <ul class="list-disc pl-5 text-xs text-gray-300 space-y-1 mt-2">
+              {volist name="eventFiles" id="f"}
+              <li><a class="text-blue-400 underline" target="_blank" href="/media/admin/strmEventFile?file={$f}">{$f}</a></li>
+              {/volist}
+            </ul>
+            {else}
+            <div class="text-xs text-gray-500 mt-2">暂无事件。可点“发送测试事件”。</div>
+            {/if}
+
+            <div class="mt-4 pt-4 border-t border-white/10">
+              <div class="text-sm text-gray-200 font-medium mb-2">302 直链（可选）</div>
+              <label class="flex items-center gap-2">
+                <input id="rdEnable" type="checkbox" class="accent-blue-500" />
+                <span class="text-sm text-gray-300">启用 302 直链</span>
+              </label>
+              <div class="mt-2">
+                <label class="block text-xs text-gray-300 mb-1">302 base（示例：https://cdn.example.com）</label>
+                <input id="rdBase" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="https://example.com" />
+                <div class="text-xs text-gray-500 mt-1">开启后，播放链可重定向到你自建的直链站点/反代。</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- MP2 Panel -->
+      <div id="panelMP2" class="hidden space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          <div class="bg-black/20 border border-white/10 rounded-xl p-4 lg:col-span-2">
+            <div class="text-sm text-gray-200 font-medium mb-3">MoviePilot2 Webhook</div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="md:col-span-2">
+                <label class="flex items-center gap-2">
+                  <input id="mp2Enable" type="checkbox" class="accent-blue-500" />
+                  <span class="text-sm text-gray-300">启用 Webhook 接收（POST /media/strm/moviePilot2Webhook）</span>
+                </label>
+                <div class="text-xs text-gray-400 mt-1">关闭时接口直接返回 403（防止误触发）。</div>
+              </div>
+
+              <div>
+                <label class="block text-xs text-gray-300 mb-1">Webhook Token（可留空=不鉴权）</label>
+                <input id="mp2Token" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="建议随机一串" />
+                <div class="text-xs text-gray-400 mt-1">发送端可用 Header: <code>X-Webhook-Token</code> 或 query <code>?token=</code>。</div>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-300 mb-1">去重窗口(秒)</label>
+                <input id="mp2Dedupe" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" />
+                <div class="text-xs text-gray-400 mt-1">相同 body 在窗口内重复上报会被忽略（返回 ok+deduped）。</div>
+              </div>
+
+              <div>
+                <label class="block text-xs text-gray-300 mb-1">触发防抖(秒)</label>
+                <input id="mp2Debounce" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" />
+                <div class="text-xs text-gray-400 mt-1">开启“自动触发”时，窗口内重复触发不会创建新任务。</div>
+              </div>
+              <div class="flex items-center">
+                <label class="flex items-center gap-2 mt-6">
+                  <input id="mp2Trigger" type="checkbox" class="accent-blue-500" />
+                  <span class="text-sm text-gray-300">Webhook 自动触发生成任务</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="bg-black/25 border border-white/10 rounded-lg p-3">
+                <div class="text-xs text-gray-400">Webhook URL</div>
+                <div class="mt-1 font-mono text-xs text-gray-200 break-all" id="mp2Url"></div>
+                <div class="mt-2 flex gap-2">
+                  <button id="btnCopyMp2Url" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm">复制 URL</button>
+                  <button id="btnCopyMp2Curl" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm">复制 curl</button>
+                  <button id="btnTestMp2Webhook" class="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 transition text-sm">发送测试事件</button>
+                </div>
+              </div>
+
+              <div class="bg-black/25 border border-white/10 rounded-lg p-3">
+                <div class="text-xs text-gray-400">可复制配置片段</div>
+                <pre class="mt-1 text-xs text-gray-200 overflow-auto whitespace-pre-wrap" id="mp2Snippet"></pre>
+                <div class="mt-2">
+                  <button id="btnCopyMp2Snippet" class="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm">复制片段</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 flex items-center gap-3">
+              <button id="btnSaveMp2" class="px-4 py-2 rounded bg-green-600 hover:bg-green-500 transition">保存配置</button>
+              <span id="saveStatusMp2" class="text-sm text-gray-300"></span>
+            </div>
+          </div>
+
+          <div class="bg-black/20 border border-white/10 rounded-xl p-4">
+            <div class="text-sm text-gray-200 font-medium mb-3">说明</div>
+            <div class="text-xs text-gray-400 leading-6">
+              <div>1) Webhook 事件会落盘到 <code>runtime/strm/events/moviepilot2_YYYYMMDD.jsonl</code></div>
+              <div>2) 触发生成：复用现有 STRM 生成方案（读取 STRM 页已保存的默认配置）</div>
+              <div>3) 去重 + 防抖：避免 MP2 重复回调造成任务风暴</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+const cfg = {$cfgJson|raw};
+
+function $(id){return document.getElementById(id)}
+
+function setActiveTab(name){
+  const cd2 = $('tabCloudDrive2');
+  const mp2 = $('tabMP2');
+  const p1 = $('panelCloudDrive2');
+  const p2 = $('panelMP2');
+  if(name==='cd2'){
+    cd2.className = 'px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 transition text-sm';
+    mp2.className = 'px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm';
+    p1.classList.remove('hidden');
+    p2.classList.add('hidden');
+  }else{
+    mp2.className = 'px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 transition text-sm';
+    cd2.className = 'px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm';
+    p2.classList.remove('hidden');
+    p1.classList.add('hidden');
+  }
+}
+
+function buildCd2Url(){
+  return location.origin + '/media/strm/cloudDrive2Webhook';
+}
+
+function buildMp2Url(){
+  return location.origin + '/media/strm/moviePilot2Webhook';
+}
+
+function rebuildSnippets(){
+  const url = buildCd2Url();
+  $('cd2Url').textContent = url;
+
+  const token = $('cd2Token').value.trim();
+  const headers = token ? ('-H "X-Webhook-Token: ' + token.replace(/\"/g,'\\"') + '" ') : '';
+  const curl = 'curl -X POST ' + headers + '"' + url + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"event":"test","time":"' + new Date().toISOString() + '"}\'';
+
+  const snippet = [
+    '# CloudDrive2 Webhook (EmbyController STRM)',
+    'URL: ' + url,
+    token ? ('Header: X-Webhook-Token: ' + token) : 'Header: (无，未启用鉴权)',
+    '',
+    '# curl',
+    curl,
+  ].join('\n');
+
+  $('cd2Snippet').textContent = snippet;
+  return {url, curl, snippet};
+}
+
+function rebuildMp2Snippets(){
+  const url = buildMp2Url();
+  $('mp2Url').textContent = url;
+
+  const token = $('mp2Token').value.trim();
+  const headers = token ? ('-H "X-Webhook-Token: ' + token.replace(/\"/g,'\\"') + '" ') : '';
+  const curl = 'curl -X POST ' + headers + '"' + url + '" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"type":"transfer.complete","data":{"transferinfo":{"success":true,"transfer_type":"test","target_item":{"storage":"u115","path":"/test/xx.mkv","type":"file","pickcode":"","extension":"mkv"},"file_list_new":[]}}}\'';
+
+  const snippet = [
+    '# MoviePilot2 Webhook (EmbyController STRM)',
+    'URL: ' + url,
+    token ? ('Header: X-Webhook-Token: ' + token) : 'Header: (无，未启用鉴权)',
+    '',
+    '# curl',
+    curl,
+  ].join('\n');
+
+  $('mp2Snippet').textContent = snippet;
+  return {url, curl, snippet};
+}
+
+async function postJson(url, data){
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  return await res.json();
+}
+
+async function copyText(t){
+  try{
+    await navigator.clipboard.writeText(t);
+    return true;
+  }catch(e){
+    // fallback
+    const ta=document.createElement('textarea');
+    ta.value=t;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    return true;
+  }
+}
+
+function init(){
+  // init values
+  $('cd2Enable').checked = !!cfg.clouddrive2_webhook_enabled;
+  $('cd2Token').value = cfg.clouddrive2_webhook_secret || '';
+  $('cd2Dedupe').value = String(cfg.clouddrive2_dedupe_sec ?? 120);
+  $('cd2Trigger').checked = !!cfg.clouddrive2_trigger_enabled;
+  $('rdEnable').checked = !!cfg.redirect_enabled;
+  $('rdBase').value = cfg.redirect_base || '';
+
+  // MP2
+  $('mp2Enable').checked = !!cfg.moviepilot2_webhook_enabled;
+  $('mp2Token').value = cfg.moviepilot2_webhook_secret || '';
+  $('mp2Dedupe').value = String(cfg.moviepilot2_dedupe_sec ?? 120);
+  $('mp2Trigger').checked = !!cfg.moviepilot2_trigger_enabled;
+  $('mp2Debounce').value = String(cfg.moviepilot2_debounce_sec ?? 60);
+
+  $('cd2Token').addEventListener('input', rebuildSnippets);
+  rebuildSnippets();
+
+  $('mp2Token').addEventListener('input', rebuildMp2Snippets);
+  rebuildMp2Snippets();
+
+  $('tabCloudDrive2').addEventListener('click', ()=>setActiveTab('cd2'));
+  $('tabMP2').addEventListener('click', ()=>setActiveTab('mp2'));
+
+  $('btnCopyUrl').addEventListener('click', async ()=>{
+    const {url} = rebuildSnippets();
+    await copyText(url);
+    $('saveStatus').textContent = '已复制 URL';
+    setTimeout(()=>{$('saveStatus').textContent='';}, 1200);
+  });
+
+  $('btnCopyCurl').addEventListener('click', async ()=>{
+    const {curl} = rebuildSnippets();
+    await copyText(curl);
+    $('saveStatus').textContent = '已复制 curl';
+    setTimeout(()=>{$('saveStatus').textContent='';}, 1200);
+  });
+
+  $('btnCopySnippet').addEventListener('click', async ()=>{
+    const {snippet} = rebuildSnippets();
+    await copyText(snippet);
+    $('saveStatus').textContent = '已复制片段';
+    setTimeout(()=>{$('saveStatus').textContent='';}, 1200);
+  });
+
+  $('btnSave').addEventListener('click', async ()=>{
+    $('saveStatus').textContent = '保存中...';
+    try{
+      const payload = {
+        clouddrive2_webhook_enabled: $('cd2Enable').checked ? 1 : 0,
+        clouddrive2_webhook_secret: $('cd2Token').value.trim(),
+        clouddrive2_dedupe_sec: parseInt($('cd2Dedupe').value || '120', 10) || 120,
+        clouddrive2_trigger_enabled: $('cd2Trigger').checked ? 1 : 0,
+        redirect_enabled: $('rdEnable').checked ? 1 : 0,
+        redirect_base: $('rdBase').value.trim(),
+      };
+      const r = await postJson('/media/admin/strmSettings', payload);
+      if(r.code!==200){
+        $('saveStatus').textContent = '保存失败：' + (r.message||'unknown');
+        return;
+      }
+      $('saveStatus').textContent = '已保存';
+      setTimeout(()=>{$('saveStatus').textContent='';}, 2000);
+    }catch(e){
+      $('saveStatus').textContent = '保存异常：' + e;
+    }
+  });
+
+  $('btnTestWebhook').addEventListener('click', async ()=>{
+    const url = buildCd2Url();
+    $('saveStatus').textContent = '发送测试事件...';
+    try{
+      const headers = {'Content-Type':'application/json'};
+      const token = $('cd2Token').value.trim();
+      if(token) headers['X-Webhook-Token']=token;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({event:'test', from:'admin-ui', time:new Date().toISOString()})
+      });
+      const txt = await res.text();
+      $('saveStatus').textContent = '测试返回：HTTP ' + res.status;
+      try{ console.log('webhook response', txt);}catch(e){}
+      setTimeout(()=>{$('saveStatus').textContent='';}, 2500);
+    }catch(e){
+      $('saveStatus').textContent = '测试异常：' + e;
+    }
+  });
+
+  // --- MP2 actions ---
+  $('btnCopyMp2Url').addEventListener('click', async ()=>{
+    const {url} = rebuildMp2Snippets();
+    await copyText(url);
+    $('saveStatusMp2').textContent = '已复制 URL';
+    setTimeout(()=>{$('saveStatusMp2').textContent='';}, 1200);
+  });
+
+  $('btnCopyMp2Curl').addEventListener('click', async ()=>{
+    const {curl} = rebuildMp2Snippets();
+    await copyText(curl);
+    $('saveStatusMp2').textContent = '已复制 curl';
+    setTimeout(()=>{$('saveStatusMp2').textContent='';}, 1200);
+  });
+
+  $('btnCopyMp2Snippet').addEventListener('click', async ()=>{
+    const {snippet} = rebuildMp2Snippets();
+    await copyText(snippet);
+    $('saveStatusMp2').textContent = '已复制片段';
+    setTimeout(()=>{$('saveStatusMp2').textContent='';}, 1200);
+  });
+
+  $('btnSaveMp2').addEventListener('click', async ()=>{
+    $('saveStatusMp2').textContent = '保存中...';
+    try{
+      const payload = {
+        moviepilot2_webhook_enabled: $('mp2Enable').checked ? 1 : 0,
+        moviepilot2_webhook_secret: $('mp2Token').value.trim(),
+        moviepilot2_dedupe_sec: parseInt($('mp2Dedupe').value || '120', 10) || 120,
+        moviepilot2_trigger_enabled: $('mp2Trigger').checked ? 1 : 0,
+        moviepilot2_debounce_sec: parseInt($('mp2Debounce').value || '60', 10) || 60,
+      };
+      const r = await postJson('/media/admin/strmSettings', payload);
+      if(r.code!==200){
+        $('saveStatusMp2').textContent = '保存失败：' + (r.message||'unknown');
+        return;
+      }
+      $('saveStatusMp2').textContent = '已保存';
+      setTimeout(()=>{$('saveStatusMp2').textContent='';}, 2000);
+    }catch(e){
+      $('saveStatusMp2').textContent = '保存异常：' + e;
+    }
+  });
+
+  $('btnTestMp2Webhook').addEventListener('click', async ()=>{
+    const url = buildMp2Url();
+    $('saveStatusMp2').textContent = '发送测试事件...';
+    try{
+      const headers = {'Content-Type':'application/json'};
+      const token = $('mp2Token').value.trim();
+      if(token) headers['X-Webhook-Token']=token;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({type:'transfer.complete', data:{transferinfo:{success:true, transfer_type:'test', target_item:{storage:'u115', path:'/test/xx.mkv', type:'file', pickcode:'', extension:'mkv'}, file_list_new:[]}}})
+      });
+      const txt = await res.text();
+      $('saveStatusMp2').textContent = '测试返回：HTTP ' + res.status;
+      try{ console.log('mp2 webhook response', txt);}catch(e){}
+      setTimeout(()=>{$('saveStatusMp2').textContent='';}, 2500);
+    }catch(e){
+      $('saveStatusMp2').textContent = '测试异常：' + e;
+    }
+  });
+}
+
+
+init();
+</script>
+
+{include file="public/_footer" /}

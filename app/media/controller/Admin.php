@@ -1300,6 +1300,32 @@ class Admin extends BaseController
         View::assign('defaultSrc', $defaultSrc);
         View::assign('defaultOut', $defaultOut);
         View::assign('defaultExts', $defaultExts);
+
+        // advanced settings defaults
+        $adv = [
+            'clouddrive2_webhook_secret' => '',
+            'clouddrive2_dedupe_sec' => '120',
+            'clouddrive2_webhook_enabled' => '0',
+            'clouddrive2_trigger_enabled' => '0',
+            'redirect_base' => '',
+            'redirect_enabled' => '0',
+            'moviepilot2_webhook_secret' => '',
+            'moviepilot2_dedupe_sec' => '120',
+            'moviepilot2_debounce_sec' => '60',
+            'moviepilot2_webhook_enabled' => '0',
+            'moviepilot2_trigger_enabled' => '0',
+        ];
+        try {
+            $cfg = new SysConfigModel();
+            $rows = $cfg->where('appName','strm')->whereIn('key', array_keys($adv))->select();
+            foreach ($rows as $r) {
+                $k = (string)$r['key'];
+                if (array_key_exists($k, $adv)) {
+                    $adv[$k] = (string)($r['value'] ?? '');
+                }
+            }
+        } catch (\Throwable $e) {}
+        View::assign('adv', $adv);
         
         // last run summary
         $lastRun = null;
@@ -1756,7 +1782,89 @@ public function strmTaskStart()
         if (array_key_exists('clouddrive2_trigger_enabled', $req)) {
             $this->strmCfgUpsert('clouddrive2_trigger_enabled', !empty($req['clouddrive2_trigger_enabled']) ? '1' : '0');
         }
+
+        // MoviePilot2 webhook（预留/立即可用）
+        if (array_key_exists('moviepilot2_webhook_enabled', $req)) {
+            $this->strmCfgUpsert('moviepilot2_webhook_enabled', !empty($req['moviepilot2_webhook_enabled']) ? '1' : '0');
+        }
+        if (array_key_exists('moviepilot2_webhook_secret', $req)) {
+            $this->strmCfgUpsert('moviepilot2_webhook_secret', trim((string)$req['moviepilot2_webhook_secret']));
+        }
+        if (array_key_exists('moviepilot2_dedupe_sec', $req)) {
+            $this->strmCfgUpsert('moviepilot2_dedupe_sec', (string)(int)$req['moviepilot2_dedupe_sec']);
+        }
+        if (array_key_exists('moviepilot2_trigger_enabled', $req)) {
+            $this->strmCfgUpsert('moviepilot2_trigger_enabled', !empty($req['moviepilot2_trigger_enabled']) ? '1' : '0');
+        }
+        if (array_key_exists('moviepilot2_debounce_sec', $req)) {
+            $this->strmCfgUpsert('moviepilot2_debounce_sec', (string)(int)$req['moviepilot2_debounce_sec']);
+        }
+
         return json(['code'=>200,'data'=>['ok'=>1]]);
+    }
+
+    // GET /media/admin/strmWebhook
+    public function strmWebhook()
+    {
+        if (session('r_user') == null || session('r_user')['authority'] != 0) {
+            return response('forbidden', 403);
+        }
+
+        $cfg = new SysConfigModel();
+        $get = function ($key, $def = '') use ($cfg) {
+            try {
+                $row = $cfg->where('appName', 'strm')->where('key', $key)->find();
+                return $row ? (string)$row['value'] : (string)$def;
+            } catch (\Throwable $e) {
+                return (string)$def;
+            }
+        };
+
+        $viewCfg = [
+            'redirect_enabled' => (int)$get('redirect_enabled', '0'),
+            'redirect_base' => $get('redirect_base', ''),
+
+            // CloudDrive2
+            'clouddrive2_webhook_enabled' => (int)$get('clouddrive2_webhook_enabled', '0'),
+            'clouddrive2_webhook_secret' => $get('clouddrive2_webhook_secret', ''),
+            'clouddrive2_dedupe_sec' => (int)$get('clouddrive2_dedupe_sec', '120'),
+            'clouddrive2_trigger_enabled' => (int)$get('clouddrive2_trigger_enabled', '0'),
+
+            // MoviePilot2
+            'moviepilot2_webhook_enabled' => (int)$get('moviepilot2_webhook_enabled', '0'),
+            'moviepilot2_webhook_secret' => $get('moviepilot2_webhook_secret', ''),
+            'moviepilot2_dedupe_sec' => (int)$get('moviepilot2_dedupe_sec', '120'),
+            'moviepilot2_trigger_enabled' => (int)$get('moviepilot2_trigger_enabled', '0'),
+            'moviepilot2_debounce_sec' => (int)$get('moviepilot2_debounce_sec', '60'),
+        ];
+
+        // events linkage
+        $dir = runtime_path() . 'strm/events/';
+        $files = [];
+        if (is_dir($dir)) {
+            $files = array_merge(
+                glob($dir . 'clouddrive2_*.jsonl') ?: [],
+                glob($dir . 'moviepilot2_*.jsonl') ?: []
+            );
+            rsort($files);
+        }
+        $basenames = array_map('basename', $files);
+        $latest = $basenames ? $basenames[0] : '';
+        $latestMtime = '';
+        if ($latest !== '') {
+            $p = $dir . $latest;
+            if (is_file($p)) {
+                $latestMtime = date('Y-m-d H:i:s', filemtime($p));
+            }
+        }
+
+        View::assign('cfg', $viewCfg);
+        View::assign('cfgJson', json_encode($viewCfg, JSON_UNESCAPED_UNICODE));
+        View::assign('eventFiles', array_slice($basenames, 0, 10));
+        View::assign('eventFileCount', count($basenames));
+        View::assign('latestEventFile', $latest);
+        View::assign('latestEventMtime', $latestMtime);
+        return View::fetch('admin/strm_webhook');
     }
 
     // GET /media/admin/strmEvents
@@ -1768,7 +1876,10 @@ public function strmTaskStart()
         $dir = runtime_path() . 'strm/events/';
         $files = [];
         if (is_dir($dir)) {
-            $files = glob($dir . 'clouddrive2_*.jsonl');
+            $files = array_merge(
+                glob($dir . 'clouddrive2_*.jsonl') ?: [],
+                glob($dir . 'moviepilot2_*.jsonl') ?: []
+            );
             rsort($files);
         }
         View::assign('files', array_map('basename', $files));
@@ -1782,7 +1893,8 @@ public function strmTaskStart()
             return response('forbidden', 403);
         }
         $file = basename((string)input('file',''));
-        if ($file === '' || !str_starts_with($file, 'clouddrive2_') || !str_ends_with($file, '.jsonl')) {
+        $okPrefix = str_starts_with($file, 'clouddrive2_') || str_starts_with($file, 'moviepilot2_');
+        if ($file === '' || !$okPrefix || !str_ends_with($file, '.jsonl')) {
             return response('bad request', 400);
         }
         $path = runtime_path() . 'strm/events/' . $file;

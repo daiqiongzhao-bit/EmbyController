@@ -312,4 +312,137 @@ class Strm extends BaseController
         return json(['code'=>200,'data'=>['ok'=>1]]);
     }
 
+
+    // POST /media/strm/moviePilot2Webhook
+    // MoviePilot2 webhook: 收到事件后落盘到 runtime/strm/events/ 并（可选）触发现有 STRM 任务生成流程。
+    public function moviePilot2Webhook()
+    {
+        $cfg = $this->loadStrmCfg();
+        $enabled = isset($cfg['moviepilot2_webhook_enabled']) && (string)$cfg['moviepilot2_webhook_enabled'] === '1';
+        if (!$enabled) {
+            return json(['code'=>403,'message'=>'webhook disabled']);
+        }
+
+        $secret = trim((string)($cfg['moviepilot2_webhook_secret'] ?? ''));
+        if ($secret !== '') {
+            $got = (string)Request::header('X-Webhook-Token','');
+            if ($got === '') { $got = (string)input('token',''); }
+            if (!hash_equals($secret, $got)) {
+                return json(['code'=>403,'message'=>'bad token']);
+            }
+        }
+
+        $body = (string)Request::getContent();
+        $payload = json_decode($body, true);
+        if (!is_array($payload)) {
+            $payload = ['raw' => $body];
+        }
+
+        $dir = runtime_path() . 'strm/events/';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        // --- dedupe ---
+        $dedupeSec = (int)($cfg['moviepilot2_dedupe_sec'] ?? '120');
+        if ($dedupeSec < 0) $dedupeSec = 0;
+        $hashSource = $body !== '' ? $body : json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $hash = sha1((string)$hashSource);
+        $dedupePath = $dir . 'moviepilot2_dedupe.json';
+        $dedupe = [];
+        if (is_file($dedupePath)) {
+            $dedupe = json_decode((string)file_get_contents($dedupePath), true) ?: [];
+        }
+        $now = time();
+        foreach ($dedupe as $k=>$t) {
+            if (!is_int($t)) { unset($dedupe[$k]); continue; }
+            if ($dedupeSec > 0 && $t < $now - $dedupeSec) unset($dedupe[$k]);
+        }
+        if (isset($dedupe[$hash])) {
+            return json(['code'=>200,'data'=>['ok'=>1,'deduped'=>1]]);
+        }
+        $dedupe[$hash] = $now;
+        @file_put_contents($dedupePath, json_encode($dedupe));
+
+        // --- event persist ---
+        $line = json_encode([
+            'time' => date('Y-m-d H:i:s'),
+            'ip' => Request::ip(),
+            'payload' => $payload,
+        ], JSON_UNESCAPED_UNICODE);
+        @file_put_contents($dir . 'moviepilot2_' . date('Ymd') . '.jsonl', $line . "\n", FILE_APPEND);
+
+        // --- optional trigger ---
+        $trigger = isset($cfg['moviepilot2_trigger_enabled']) && (string)$cfg['moviepilot2_trigger_enabled'] === '1';
+        if ($trigger) {
+            try {
+                // debounce: avoid generating too frequently
+                $debounceSec = (int)($cfg['moviepilot2_debounce_sec'] ?? '60');
+                if ($debounceSec < 0) $debounceSec = 0;
+                $lastTriggerPath = $dir . 'moviepilot2_last_trigger.txt';
+                $last = 0;
+                if (is_file($lastTriggerPath)) {
+                    $last = (int)trim((string)file_get_contents($lastTriggerPath));
+                }
+                if ($debounceSec > 0 && $last > 0 && ($now - $last) < $debounceSec) {
+                    return json(['code'=>200,'data'=>['ok'=>1,'triggered'=>0,'debounced'=>1]]);
+                }
+
+                $taskDir = runtime_path() . 'strm/tasks/';
+                if (!is_dir($taskDir)) { @mkdir($taskDir, 0755, true); }
+                // use saved defaults from /media/admin/strm
+                $srcDir = trim((string)($cfg['src_dir'] ?? ''));
+                $outDir = trim((string)($cfg['out_dir'] ?? ''));
+                $baseUrl = trim((string)($cfg['base_url'] ?? ''));
+                if ($srcDir !== '' && $outDir !== '' && $baseUrl !== '') {
+                    // mark trigger time only when we are sure to create a task
+                    @file_put_contents($lastTriggerPath, (string)$now);
+
+                    $taskId = 'task_' . date('Ymd_His') . '_' . substr(md5(uniqid('', true)), 0, 8);
+                    $logFile = 'strm_' . $taskId . '.log';
+                    $task = [
+                        'id' => $taskId,
+                        'status' => 'queued',
+                        'createdAt' => date('Y-m-d H:i:s'),
+                        'srcDir' => $srcDir,
+                        'outDir' => $outDir,
+                        'baseUrl' => $baseUrl,
+                        'exts' => (string)($cfg['exts'] ?? 'mkv,mp4,avi,mov,m4v'),
+                        'overwrite' => false,
+                        'incremental' => true,
+                        'syncDelete' => false,
+                        'logFile' => $logFile,
+                        'pid' => 0,
+                        'countStrm' => 0,
+                        'countSkip' => 0,
+                        'countDel' => 0,
+                        'costMs' => 0,
+                        'error' => '',
+                    ];
+                    @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
+
+                    // try kick if no running
+                    $hasRunning = false;
+                    foreach (glob($taskDir . 'task_*.json') as $f) {
+                        $j = json_decode((string)file_get_contents($f), true) ?: [];
+                        if (($j['status'] ?? '') === 'running') { $hasRunning = true; break; }
+                    }
+                    if (!$hasRunning) {
+                        $cmd = 'cd ' . escapeshellarg((string)root_path()) . ' && ' . PHP_BINARY . ' think strm:run ' . escapeshellarg($taskId) . ' > /dev/null 2>&1 & echo $!';
+                        $pid = (int)trim((string)shell_exec($cmd));
+                        if ($pid > 0) {
+                            $task['pid'] = $pid;
+                            $task['status'] = 'running';
+                            $task['startedAt'] = date('Y-m-d H:i:s');
+                            @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+
+        return json(['code'=>200,'data'=>['ok'=>1]]);
+    }
+
 }
