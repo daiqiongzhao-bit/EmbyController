@@ -2056,7 +2056,7 @@ public function strmTaskStart()
         return $default;
     }
 
-    private function strm115_open_get($path, array $qs = [], $timeoutSec = 20)
+    private function strm115_open_get($path, array $qs = [], $timeoutSec = 20, $retry = true)
     {
         $token = $this->strm115_cfg_get('b2_access_token', '');
         if ($token === '') {
@@ -2089,7 +2089,53 @@ public function strmTaskStart()
         $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         $json = json_decode($resp, true);
+
+        // Auto refresh on 401 once
+        if ($retry && $code === 401) {
+            $r = $this->strm115_refresh_access_token();
+            if ($r['ok']) {
+                return $this->strm115_open_get($path, $qs, $timeoutSec, false);
+            }
+        }
+
         return [true, $code, $json, $resp];
+    }
+
+    // Refresh access token using refresh_token
+    private function strm115_refresh_access_token()
+    {
+        $refresh = $this->strm115_cfg_get('b2_refresh_token', '');
+        if ($refresh === '') {
+            return ['ok' => false, 'message' => 'missing refresh_token'];
+        }
+
+        [$ok, $raw, $http, $j] = $this->strm115_http_post_form(
+            'https://passportapi.115.com/open/refreshToken',
+            [
+                'refresh_token' => (string)$refresh,
+            ],
+            25
+        );
+        if (!$ok) {
+            return ['ok' => false, 'message' => 'refresh failed: ' . $raw];
+        }
+        if (!is_array($j) || !isset($j['data']['access_token'])) {
+            $msg = is_array($j) ? (string)($j['message'] ?? $j['error'] ?? '') : '';
+            return ['ok' => false, 'message' => 'refresh bad response' . ($msg ? (':'.$msg) : '')];
+        }
+
+        $data = $j['data'];
+        $expiresIn = (int)($data['expires_in'] ?? 0);
+        $expiresAt = $expiresIn > 0 ? (time() + $expiresIn) : 0;
+        $this->strm115_cfg_upsert('strm115', 'b2_access_token', (string)$data['access_token']);
+        if (isset($data['refresh_token']) && (string)$data['refresh_token'] !== '') {
+            $this->strm115_cfg_upsert('strm115', 'b2_refresh_token', (string)$data['refresh_token']);
+        }
+        if ($expiresIn > 0) {
+            $this->strm115_cfg_upsert('strm115', 'b2_expires_in', (string)$expiresIn);
+            $this->strm115_cfg_upsert('strm115', 'b2_expires_at', (string)$expiresAt);
+        }
+        return ['ok' => true, 'http' => $http];
     }
     private function strm115_cfg_upsert($appName, $key, $value)
     {
@@ -2954,7 +3000,7 @@ $base = rtrim($baseUrl, '/');
         }
         $access = $this->strm115_cfg_get('b2_access_token', '');
         $refresh = $this->strm115_cfg_get('b2_refresh_token', '');
-        $expiresAt = $this->strm115_cfg_get('b2_expires_at', '');
+        $expiresAt = (int)$this->strm115_cfg_get('b2_expires_at', '0');
         $sigEnabled = $this->strm115_cfg_get('play_sig_enabled', '0');
         $sigTtl = $this->strm115_cfg_get('play_sig_ttl', '600');
 
@@ -2965,9 +3011,17 @@ $base = rtrim($baseUrl, '/');
             return substr($t,0,5) . '...' . substr($t,-5);
         };
 
+        $now = time();
+        $expired = ($expiresAt > 0 && $expiresAt <= $now);
+        $expiresHuman = $expiresAt > 0 ? date('Y-m-d H:i:s', $expiresAt) : '';
+        $leftSec = $expiresAt > 0 ? max(0, $expiresAt - $now) : 0;
+
         return json(['code'=>200,'data'=>[
             'authorized' => ($access !== ''),
+            'expired' => $expired,
             'expires_at' => $expiresAt,
+            'expires_human' => $expiresHuman,
+            'expires_left_sec' => $leftSec,
             'access_masked' => $mask($access),
             'refresh_masked' => $mask($refresh),
             'play_sig_enabled' => $sigEnabled,

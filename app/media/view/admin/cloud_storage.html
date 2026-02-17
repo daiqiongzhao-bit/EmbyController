@@ -150,8 +150,14 @@ async function refreshStatus(){
   appendLog('status: '+JSON.stringify(j));
   if (!j || j.code!==200) return;
   const d=j.data||{};
-  document.getElementById('stAuth').textContent = d.authorized ? '已授权' : '未授权';
-  document.getElementById('stExp').textContent = d.expires_at ? d.expires_at : '-';
+  document.getElementById('stAuth').textContent = d.authorized ? (d.expired ? '已过期' : '已授权') : '未授权';
+  if (d.expires_human) {
+    const left = (d.expires_left_sec!=null) ? Number(d.expires_left_sec) : 0;
+    const leftMin = Math.floor(left/60);
+    document.getElementById('stExp').textContent = `${d.expires_human}${d.expired ? '（已过期）' : `（剩余约 ${leftMin} 分钟）`}`;
+  } else {
+    document.getElementById('stExp').textContent = '-';
+  }
   const a=(d.access_masked || '-');
   const r=(d.refresh_masked || '-');
   const ea=document.getElementById('stAccess');
