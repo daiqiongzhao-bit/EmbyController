@@ -20,8 +20,9 @@ class MigrateStrm115TokensToAccounts extends Migrator
             return;
         }
 
-        $get = function($key) use ($cfgTable) {
-            $row = $this->fetchRow("SELECT value FROM {$cfgTable} WHERE appName='strm115' AND `key`=" . $this->getAdapter()->quote($key) . ' LIMIT 1');
+        $pdo = $this->getAdapter()->getConnection();
+        $get = function($key) use ($cfgTable, $pdo) {
+            $row = $this->fetchRow("SELECT value FROM {$cfgTable} WHERE appName='strm115' AND `key`=" . $pdo->quote($key) . ' LIMIT 1');
             return $row ? (string)$row['value'] : '';
         };
 
@@ -39,10 +40,10 @@ class MigrateStrm115TokensToAccounts extends Migrator
         $this->execute(
             'INSERT INTO ' . $accTable . ' (createdAt, updatedAt, name, client_id, access_token, refresh_token, expires_in, expires_at, is_default, status) VALUES ' .
             '(CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ' .
-            $this->getAdapter()->quote($name) . ',' .
-            ($clientId !== '' ? $this->getAdapter()->quote($clientId) : 'NULL') . ',' .
-            ($access !== '' ? $this->getAdapter()->quote($access) : 'NULL') . ',' .
-            ($refresh !== '' ? $this->getAdapter()->quote($refresh) : 'NULL') . ',' .
+            $pdo->quote($name) . ',' .
+            ($clientId !== '' ? $pdo->quote($clientId) : 'NULL') . ',' .
+            ($access !== '' ? $pdo->quote($access) : 'NULL') . ',' .
+            ($refresh !== '' ? $pdo->quote($refresh) : 'NULL') . ',' .
             (int)$expiresIn . ',' . (int)$expiresAt . ',' . (int)$isDefault . ',1)'
         );
 
@@ -52,9 +53,9 @@ class MigrateStrm115TokensToAccounts extends Migrator
             $defaultId = (string)$idRow['id'];
             $row = $this->fetchRow("SELECT id FROM {$cfgTable} WHERE appName='strm115' AND `key`='default_account_id' LIMIT 1");
             if ($row && isset($row['id'])) {
-                $this->execute('UPDATE ' . $cfgTable . ' SET value=' . $this->getAdapter()->quote($defaultId) . " WHERE id=" . (int)$row['id']);
+                $this->execute('UPDATE ' . $cfgTable . ' SET value=' . $pdo->quote($defaultId) . " WHERE id=" . (int)$row['id']);
             } else {
-                $this->execute('INSERT INTO ' . $cfgTable . " (createdAt, updatedAt, appName, `key`, value, type, status) VALUES (CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'strm115','default_account_id'," . $this->getAdapter()->quote($defaultId) . ",0,1)");
+                $this->execute('INSERT INTO ' . $cfgTable . " (createdAt, updatedAt, appName, `key`, value, type, status) VALUES (CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'strm115','default_account_id'," . $pdo->quote($defaultId) . ",0,1)");
             }
         }
     }
