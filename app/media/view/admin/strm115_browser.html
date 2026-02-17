@@ -7,12 +7,8 @@
         <h1 class="text-2xl font-bold">115 目录浏览 / 生成 STRM</h1>
         <div class="text-xs text-gray-500 mt-1">版本：<?php echo env('APP_VERSION','unknown'); ?> <span class="text-gray-600">(build <?php echo env('BUILD_TAG','-'); ?>)</span></div>
       </div>
-      <div class="text-sm">
-        <a class="text-blue-400 underline" href="/media/admin/strm115" target="_blank">返回 115 配置</a>
-        <span class="text-gray-700 px-2">|</span>
-        <a class="text-blue-400 underline" href="/media/admin/strm115Audit" target="_blank">审计日志</a>
-        <span class="text-gray-700 px-2">|</span>
-        <a class="text-blue-400 underline" href="/media/admin/strm115Security" target="_blank">安全配置</a>
+      <div class="text-sm text-gray-500">
+        提示：相关配置/日志请从左侧菜单进入。
       </div>
     </div>
 
@@ -40,8 +36,6 @@
           <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" onclick="load115List()">加载目录</button>
           <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="navUp115()">返回上级</button>
           <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="navRoot115()">回到根目录</button>
-          <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="toggleAdvanced()">设置</button>
-          <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="toggleLog()">日志</button>
         </div>
       </div>
 
@@ -52,7 +46,7 @@
         <span id="listSummary" class="text-gray-400"></span>
       </div>
 
-      <!-- 高级设置（默认可折叠） -->
+      <!-- 生成参数（固定显示；菜单里有入口就不在页面堆“设置”按钮） -->
       <div id="advBox" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="block text-sm text-gray-300 mb-1">STRM 输出位置（服务器目录）</label>
@@ -102,7 +96,6 @@
       </div>
     </div>
 
-    <pre id="log" class="mt-4 w-full min-h-[80px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto hidden"></pre>
   </div>
 </div>
 
@@ -327,19 +320,6 @@ async function gen115Strm(){
   document.getElementById('genSummary').textContent = `已生成 ${r.data.count} 个，输出目录：${outDir}`;
 }
 
-
-
-function toggleLog(){
-  const el=document.getElementById('log');
-  if(!el) return;
-  el.classList.toggle('hidden');
-}
-function toggleAdvanced(){
-  const el=document.getElementById('advBox');
-  if(!el) return;
-  el.classList.toggle('hidden');
-}
-
 async function genSelectedFolders(){
   const outDir = document.getElementById('outDir115').value.trim();
   const baseUrl = document.getElementById('baseUrl115').value.trim();
@@ -376,8 +356,7 @@ async function genFolder115(it){
 
   if (!outDir || !baseUrl) {
     document.getElementById('genSummary').textContent = 'outDir/baseUrl 不能为空';
-    toggleAdvanced();
-    return;
+        return;
   }
   document.getElementById('genSummary').textContent = '递归生成中...';
   const cid = String(it.cid || it.fileId);
