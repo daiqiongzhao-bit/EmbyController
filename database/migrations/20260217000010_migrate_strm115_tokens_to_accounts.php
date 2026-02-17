@@ -9,14 +9,19 @@ class MigrateStrm115TokensToAccounts extends Migrator
             return;
         }
 
+        $prefix = (string)($this->getAdapter()->getOption('table_prefix') ?? '');
+        $cfgTable = $prefix . 'config';
+        $accTable = $prefix . 'strm115_account';
+
         // If any account already exists, don't auto-migrate again.
-        $cnt = (int)$this->fetchRow('SELECT COUNT(1) AS c FROM strm115_account')['c'];
+        $cntRow = $this->fetchRow('SELECT COUNT(1) AS c FROM ' . $accTable);
+        $cnt = (int)($cntRow['c'] ?? 0);
         if ($cnt > 0) {
             return;
         }
 
-        $get = function($key) {
-            $row = $this->fetchRow("SELECT value FROM config WHERE appName='strm115' AND `key`=" . $this->getAdapter()->quote($key) . ' LIMIT 1');
+        $get = function($key) use ($cfgTable) {
+            $row = $this->fetchRow("SELECT value FROM {$cfgTable} WHERE appName='strm115' AND `key`=" . $this->getAdapter()->quote($key) . ' LIMIT 1');
             return $row ? (string)$row['value'] : '';
         };
 
@@ -32,7 +37,7 @@ class MigrateStrm115TokensToAccounts extends Migrator
         // Insert even if token empty (to create a visible placeholder), but keep default only when enabled or has access.
         $isDefault = 1;
         $this->execute(
-            'INSERT INTO strm115_account (createdAt, updatedAt, name, client_id, access_token, refresh_token, expires_in, expires_at, is_default, status) VALUES ' .
+            'INSERT INTO ' . $accTable . ' (createdAt, updatedAt, name, client_id, access_token, refresh_token, expires_in, expires_at, is_default, status) VALUES ' .
             '(CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ' .
             $this->getAdapter()->quote($name) . ',' .
             ($clientId !== '' ? $this->getAdapter()->quote($clientId) : 'NULL') . ',' .
@@ -42,14 +47,14 @@ class MigrateStrm115TokensToAccounts extends Migrator
         );
 
         // Record default account id into config for faster lookups (optional)
-        $idRow = $this->fetchRow('SELECT id FROM strm115_account WHERE is_default=1 ORDER BY id ASC LIMIT 1');
+        $idRow = $this->fetchRow('SELECT id FROM ' . $accTable . ' WHERE is_default=1 ORDER BY id ASC LIMIT 1');
         if ($idRow && isset($idRow['id'])) {
             $defaultId = (string)$idRow['id'];
-            $row = $this->fetchRow("SELECT id FROM config WHERE appName='strm115' AND `key`='default_account_id' LIMIT 1");
+            $row = $this->fetchRow("SELECT id FROM {$cfgTable} WHERE appName='strm115' AND `key`='default_account_id' LIMIT 1");
             if ($row && isset($row['id'])) {
-                $this->execute('UPDATE config SET value=' . $this->getAdapter()->quote($defaultId) . " WHERE id=" . (int)$row['id']);
+                $this->execute('UPDATE ' . $cfgTable . ' SET value=' . $this->getAdapter()->quote($defaultId) . " WHERE id=" . (int)$row['id']);
             } else {
-                $this->execute("INSERT INTO config (createdAt, updatedAt, appName, `key`, value, type, status) VALUES (CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'strm115','default_account_id'," . $this->getAdapter()->quote($defaultId) . ",0,1)");
+                $this->execute('INSERT INTO ' . $cfgTable . " (createdAt, updatedAt, appName, `key`, value, type, status) VALUES (CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'strm115','default_account_id'," . $this->getAdapter()->quote($defaultId) . ",0,1)");
             }
         }
     }
