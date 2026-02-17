@@ -7,5 +7,6 @@ return [
     'commands' => [
         'websocket' => 'app\command\WebSocket',
         'strm:run' => 'app\\command\\StrmTask',
+        'strm115:preRefresh' => 'app\\command\\Strm115PreRefresh',
     ],
 ];

@@ -233,11 +233,13 @@ class Strm extends BaseController
             'ip' => Request::ip(),
             'payload' => $payload,
         ], JSON_UNESCAPED_UNICODE);
+
         // dedupe window (seconds)
         $dedupeSec = (int)($cfg['clouddrive2_dedupe_sec'] ?? '120');
         if ($dedupeSec < 0) $dedupeSec = 0;
-        $hash = sha1($line);
-        $dedupePath = $dir . 'dedupe.json';
+        $hashSource = $body !== '' ? $body : json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $hash = sha1((string)$hashSource);
+        $dedupePath = $dir . 'clouddrive2_dedupe.json';
         $dedupe = [];
         if (is_file($dedupePath)) {
             $dedupe = json_decode((string)file_get_contents($dedupePath), true) ?: [];
@@ -260,51 +262,110 @@ class Strm extends BaseController
         $trigger = isset($cfg['clouddrive2_trigger_enabled']) && (string)$cfg['clouddrive2_trigger_enabled'] === '1';
         if ($trigger) {
             try {
+                // debounce: avoid generating too frequently
+                $debounceSec = (int)($cfg['clouddrive2_debounce_sec'] ?? '60');
+                if ($debounceSec < 0) $debounceSec = 0;
+                $lastTriggerPath = $dir . 'clouddrive2_last_trigger.txt';
+                $last = 0;
+                if (is_file($lastTriggerPath)) {
+                    $last = (int)trim((string)file_get_contents($lastTriggerPath));
+                }
+                if ($debounceSec > 0 && $last > 0 && ($now - $last) < $debounceSec) {
+                    return json(['code'=>200,'data'=>['ok'=>1,'triggered'=>0,'debounced'=>1]]);
+                }
+
                 $taskDir = runtime_path() . 'strm/tasks/';
                 if (!is_dir($taskDir)) { @mkdir($taskDir, 0755, true); }
                 $srcDir = trim((string)($cfg['src_dir'] ?? ''));
                 $outDir = trim((string)($cfg['out_dir'] ?? ''));
                 $baseUrl = trim((string)($cfg['base_url'] ?? ''));
-                if ($srcDir !== '' && $outDir !== '' && $baseUrl !== '') {
-                    $taskId = 'task_' . date('Ymd_His') . '_' . substr(md5(uniqid('', true)), 0, 8);
-                    $logFile = 'strm_' . $taskId . '.log';
-                    $task = [
-                        'id' => $taskId,
-                        'status' => 'queued',
-                        'createdAt' => date('Y-m-d H:i:s'),
-                        'srcDir' => $srcDir,
-                        'outDir' => $outDir,
-                        'baseUrl' => $baseUrl,
-                        'exts' => (string)($cfg['exts'] ?? 'mkv,mp4,avi,mov,m4v'),
-                        'overwrite' => false,
-                        'incremental' => true,
-                        'syncDelete' => false,
-                        'logFile' => $logFile,
-                        'pid' => 0,
-                        'countStrm' => 0,
-                        'countSkip' => 0,
-                        'countDel' => 0,
-                        'costMs' => 0,
-                        'error' => '',
-                    ];
-                    @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
-                    // try kick if no running
-                    $hasRunning = false;
-                    foreach (glob($taskDir . 'task_*.json') as $f) {
-                        $j = json_decode((string)file_get_contents($f), true) ?: [];
-                        if (($j['status'] ?? '') === 'running') { $hasRunning = true; break; }
-                    }
-                    if (!$hasRunning) {
-                        $cmd = 'cd ' . escapeshellarg((string)root_path()) . ' && ' . PHP_BINARY . ' think strm:run ' . escapeshellarg($taskId) . ' > /dev/null 2>&1 & echo $!';
-                        $pid = (int)trim((string)shell_exec($cmd));
-                        if ($pid > 0) {
-                            $task['pid'] = $pid;
-                            $task['status'] = 'running';
-                            $task['startedAt'] = date('Y-m-d H:i:s');
-                            @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
+                if ($srcDir === '' || $outDir === '' || $baseUrl === '') {
+                    return json(['code'=>200,'data'=>['ok'=>1,'triggered'=>0,'message'=>'missing src_dir/out_dir/base_url']]);
+                }
+
+                // Extract path from event payload (best effort)
+                $paths = [];
+                $walk = function($x) use (&$walk, &$paths) {
+                    if (is_array($x)) {
+                        foreach ($x as $k=>$v) {
+                            if (is_string($v)) {
+                                $kk = is_string($k) ? strtolower((string)$k) : '';
+                                if ($kk !== '' && (str_contains($kk, 'path') || str_contains($kk, 'file') || str_contains($kk, 'src'))) {
+                                    $paths[] = $v;
+                                }
+                            }
+                            if (is_array($v)) $walk($v);
                         }
                     }
+                };
+                $walk($payload);
+
+                $scanDir = '';
+                foreach ($paths as $p) {
+                    $p = trim((string)$p);
+                    if ($p === '') continue;
+                    // relative path -> join with srcDir
+                    if (!str_starts_with($p, '/') && !preg_match('/^[A-Za-z]:\\\\/', $p)) {
+                        $p = rtrim($srcDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($p, DIRECTORY_SEPARATOR);
+                    }
+                    // file path -> use its parent dir
+                    if (preg_match('/\.[A-Za-z0-9]{2,5}$/', $p)) {
+                        $p = dirname($p);
+                    }
+                    $rp = realpath($p);
+                    if ($rp === false) continue;
+                    $srcReal = realpath($srcDir);
+                    if ($srcReal && str_starts_with($rp . DIRECTORY_SEPARATOR, rtrim($srcReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+                        $scanDir = $rp;
+                        break;
+                    }
                 }
+
+                $taskId = 'task_' . date('Ymd_His') . '_' . substr(md5(uniqid('', true)), 0, 8);
+                $logFile = 'strm_' . $taskId . '.log';
+
+                $task = [
+                    'id' => $taskId,
+                    'status' => 'queued',
+                    'createdAt' => date('Y-m-d H:i:s'),
+                    'srcDir' => ($scanDir !== '' ? $scanDir : $srcDir),
+                    'srcBaseDir' => $srcDir,
+                    'outDir' => $outDir,
+                    'baseUrl' => $baseUrl,
+                    'exts' => (string)($cfg['exts'] ?? 'mkv,mp4,avi,mov,m4v'),
+                    'overwrite' => false,
+                    'incremental' => true,
+                    'syncDelete' => false,
+                    'logFile' => $logFile,
+                    'pid' => 0,
+                    'countStrm' => 0,
+                    'countSkip' => 0,
+                    'countDel' => 0,
+                    'costMs' => 0,
+                    'error' => '',
+                ];
+
+                @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
+                @file_put_contents($lastTriggerPath, (string)$now);
+
+                // try kick if no running
+                $hasRunning = false;
+                foreach (glob($taskDir . 'task_*.json') as $f) {
+                    $j = json_decode((string)file_get_contents($f), true) ?: [];
+                    if (($j['status'] ?? '') === 'running') { $hasRunning = true; break; }
+                }
+                if (!$hasRunning) {
+                    $cmd = 'cd ' . escapeshellarg((string)root_path()) . ' && ' . PHP_BINARY . ' think strm:run ' . escapeshellarg($taskId) . ' > /dev/null 2>&1 & echo $!';
+                    $pid = (int)trim((string)shell_exec($cmd));
+                    if ($pid > 0) {
+                        $task['pid'] = $pid;
+                        $task['status'] = 'running';
+                        $task['startedAt'] = date('Y-m-d H:i:s');
+                        @file_put_contents($taskDir . $taskId . '.json', json_encode($task, JSON_UNESCAPED_UNICODE));
+                    }
+                }
+
+                return json(['code'=>200,'data'=>['ok'=>1,'triggered'=>1,'mode'=>($scanDir!==''?'path':'full'),'taskId'=>$taskId,'scanDir'=>$scanDir]]);
             } catch (\Throwable $e) {
             }
         }
@@ -395,6 +456,42 @@ class Strm extends BaseController
                 $outDir = trim((string)($cfg['out_dir'] ?? ''));
                 $baseUrl = trim((string)($cfg['base_url'] ?? ''));
                 if ($srcDir !== '' && $outDir !== '' && $baseUrl !== '') {
+                    // Extract path from event payload (best effort)
+                    $paths = [];
+                    $walk = function($x) use (&$walk, &$paths) {
+                        if (is_array($x)) {
+                            foreach ($x as $k=>$v) {
+                                if (is_string($v)) {
+                                    $kk = is_string($k) ? strtolower((string)$k) : '';
+                                    if ($kk !== '' && (str_contains($kk, 'path') || str_contains($kk, 'file') || str_contains($kk, 'src'))) {
+                                        $paths[] = $v;
+                                    }
+                                }
+                                if (is_array($v)) $walk($v);
+                            }
+                        }
+                    };
+                    $walk($payload);
+
+                    $scanDir = '';
+                    foreach ($paths as $p) {
+                        $p = trim((string)$p);
+                        if ($p === '') continue;
+                        if (!str_starts_with($p, '/') && !preg_match('/^[A-Za-z]:\\\\/', $p)) {
+                            $p = rtrim($srcDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($p, DIRECTORY_SEPARATOR);
+                        }
+                        if (preg_match('/\.[A-Za-z0-9]{2,5}$/', $p)) {
+                            $p = dirname($p);
+                        }
+                        $rp = realpath($p);
+                        if ($rp === false) continue;
+                        $srcReal = realpath($srcDir);
+                        if ($srcReal && str_starts_with($rp . DIRECTORY_SEPARATOR, rtrim($srcReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+                            $scanDir = $rp;
+                            break;
+                        }
+                    }
+
                     // mark trigger time only when we are sure to create a task
                     @file_put_contents($lastTriggerPath, (string)$now);
 
@@ -404,7 +501,8 @@ class Strm extends BaseController
                         'id' => $taskId,
                         'status' => 'queued',
                         'createdAt' => date('Y-m-d H:i:s'),
-                        'srcDir' => $srcDir,
+                        'srcDir' => ($scanDir !== '' ? $scanDir : $srcDir),
+                        'srcBaseDir' => $srcDir,
                         'outDir' => $outDir,
                         'baseUrl' => $baseUrl,
                         'exts' => (string)($cfg['exts'] ?? 'mkv,mp4,avi,mov,m4v'),

@@ -21,6 +21,7 @@
               <th class="text-left px-4 py-3">类型</th>
               <th class="text-left px-4 py-3">名称</th>
               <th class="text-left px-4 py-3">默认</th>
+              <th class="text-left px-4 py-3">账号状态</th>
               <th class="text-left px-4 py-3">授权状态</th>
               <th class="text-left px-4 py-3">过期时间</th>
               <th class="text-left px-4 py-3 min-w-[220px]">Token（脱敏）</th>
@@ -32,7 +33,10 @@
       </div>
 
       <div class="px-4 py-3 text-xs text-gray-500 border-t border-white/10">
-        说明：扫码授权会写入“选中的账号”。目录浏览/生成 STRM 默认使用“默认账号”，也可在页面切换。
+        说明：扫码授权会写入“选中的账号”。
+        <span class="text-gray-400">默认账号影响范围：</span>
+        <span class="text-gray-500">目录浏览/取 pickcode/生成 STRM/播放跳转（token 刷新）默认使用“默认账号”。</span>
+        <span class="text-gray-500">停用的账号不会被用于默认流程。</span>
       </div>
     </div>
 
@@ -167,20 +171,29 @@ async function loadAccounts(){
   tb.innerHTML='';
   if(!ACCS.length){
     const tr=document.createElement('tr');
-    tr.innerHTML = `<td class="px-4 py-4 text-gray-400" colspan="7">暂无账号，请点击“新增 / 授权”。</td>`;
+    tr.innerHTML = `<td class="px-4 py-4 text-gray-400" colspan="8">暂无账号，请点击“新增 / 授权”。</td>`;
     tb.appendChild(tr);
     return;
   }
   ACCS.forEach(a=>{
     const tr=document.createElement('tr');
     tr.className='text-gray-200';
+    const badgeEnabled = a.status===1
+      ? '<span class="px-2 py-1 rounded bg-emerald-600/20 text-emerald-300 text-xs">启用</span>'
+      : '<span class="px-2 py-1 rounded bg-white/10 text-gray-300 text-xs">停用</span>';
+
     tr.innerHTML = `
       <td class="px-4 py-4">115</td>
       <td class="px-4 py-4">
-        <div class="font-medium">${(a.name||'-')}</div>
+        <div class="flex items-center gap-2">
+          <div class="font-medium">${(a.name||'-')}</div>
+          ${a.is_default?'<span class="px-2 py-1 rounded bg-green-600/20 text-green-300 text-xs">默认</span>':''}
+        </div>
         <div class="text-[11px] text-gray-500">ID: ${a.id}${a.client_id?(' · AppID: '+a.client_id):''}</div>
+        <div class="text-[11px] text-gray-500 mt-1">备注：${(a.remark||'-')}</div>
       </td>
-      <td class="px-4 py-4">${a.is_default?'<span class="px-2 py-1 rounded bg-green-600/20 text-green-300 text-xs">默认</span>':'-'}</td>
+      <td class="px-4 py-4">${a.is_default?'是':'-'}</td>
+      <td class="px-4 py-4">${badgeEnabled}</td>
       <td class="px-4 py-4" id="stAuth_${a.id}">-</td>
       <td class="px-4 py-4" id="stExp_${a.id}">-</td>
       <td class="px-4 py-4 min-w-0">
@@ -191,7 +204,9 @@ async function loadAccounts(){
       </td>
       <td class="px-4 py-4 text-right whitespace-nowrap">
         <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="openAuthFor(${a.id})">授权/续期</button>
+        <button class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="editRemark(${a.id})">备注</button>
         ${a.is_default? '' : `<button class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="setDefault(${a.id})">设为默认</button>`}
+        ${a.is_default? '' : `<button class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="toggleAcc(${a.id}, ${a.status===1?0:1})">${a.status===1?'停用':'启用'}</button>`}
         ${a.is_default? '' : `<button class="ml-2 px-3 py-2 rounded bg-red-600/20 hover:bg-red-600/30 text-red-200" onclick="delAcc(${a.id})">删除</button>`}
         <a class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20 inline-block" href="/media/admin/strm115Security" target="_blank">安全</a>
       </td>
@@ -227,14 +242,40 @@ async function refreshAll(){
 }
 
 async function setDefault(id){
-  if(!confirm('确认将该账号设为默认？')) return;
+  const a = ACCS.find(x=>x.id===id);
+  const label = a ? (a.name||('账号#'+id)) : ('账号#'+id);
+  if(!confirm(`确认将「${label}」设为默认？`)) return;
   const r = await postJson('/media/admin/strm115AccountSetDefault', {account_id:id}).catch(()=>null);
   appendLog('setDefault: '+JSON.stringify(r));
   await refreshAll();
 }
 
+async function editRemark(id){
+  const a = ACCS.find(x=>x.id===id);
+  const cur = a ? (a.remark||'') : '';
+  const v = prompt('编辑备注（留空表示无备注）', cur);
+  if (v === null) return;
+  const r = await postJson('/media/admin/strm115AccountUpdate', {account_id:id, remark: v}).catch(()=>null);
+  appendLog('update: '+JSON.stringify(r));
+  await refreshAll();
+}
+
+async function toggleAcc(id, status){
+  const a = ACCS.find(x=>x.id===id);
+  const label = a ? (a.name||('账号#'+id)) : ('账号#'+id);
+  const act = status===1 ? '启用' : '停用';
+  if(!confirm(`确认${act}「${label}」？`)) return;
+  const r = await postJson('/media/admin/strm115AccountToggle', {account_id:id, status}).catch(()=>null);
+  appendLog('toggle: '+JSON.stringify(r));
+  await refreshAll();
+}
+
 async function delAcc(id){
-  if(!confirm('确认删除该账号？（不可恢复）')) return;
+  const a = ACCS.find(x=>x.id===id);
+  const label = a ? (a.name||('账号#'+id)) : ('账号#'+id);
+  if(!confirm(`确认删除「${label}」？（不可恢复）`)) return;
+  const x = prompt('二次确认：请输入 DELETE 以继续删除');
+  if ((x||'').trim().toUpperCase() !== 'DELETE') return;
   const r = await postJson('/media/admin/strm115AccountDelete', {account_id:id}).catch(()=>null);
   appendLog('delete: '+JSON.stringify(r));
   await refreshAll();

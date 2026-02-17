@@ -2058,16 +2058,30 @@ public function strmTaskStart()
 
     private function strm115_account_default_id()
     {
-        // 1) config override
+        // 1) config override (must be enabled)
         $cfgId = (int)$this->strm115_cfg_get('default_account_id', '0');
-        if ($cfgId > 0) return $cfgId;
+        if ($cfgId > 0) {
+            try {
+                $m = new \app\media\model\Strm115AccountModel();
+                $row = $m->where('id', $cfgId)->find();
+                if ($row && (int)($row['status'] ?? 1) === 1) {
+                    return $cfgId;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
 
-        // 2) table default flag
+        // 2) table default flag (enabled only)
         try {
             $m = new \app\media\model\Strm115AccountModel();
-            $row = $m->where('is_default', 1)->order('id', 'asc')->find();
+            $row = $m->where('is_default', 1)->where('status', 1)->order('id', 'asc')->find();
             if ($row) return (int)$row['id'];
-        } catch (\Throwable $e) {}
+
+            // 3) fallback: first enabled account
+            $row2 = $m->where('status', 1)->order('id', 'asc')->find();
+            if ($row2) return (int)$row2['id'];
+        } catch (\Throwable $e) {
+        }
         return 0;
     }
 
@@ -2081,7 +2095,12 @@ public function strmTaskStart()
         try {
             $m = new \app\media\model\Strm115AccountModel();
             $row = $m->where('id', $id)->find();
-            return $row ? $row->toArray() : [];
+            if (!$row) return [];
+            $a = $row->toArray();
+            if ((int)($a['status'] ?? 1) !== 1) {
+                return [];
+            }
+            return $a;
         } catch (\Throwable $e) {
             return [];
         }
@@ -2093,6 +2112,10 @@ public function strmTaskStart()
         if ($id <= 0) return false;
         try {
             $m = new \app\media\model\Strm115AccountModel();
+            $row = $m->where('id', $id)->find();
+            if (!$row) return false;
+            if ((int)($row['status'] ?? 1) !== 1) return false;
+
             $m->where('is_default', 1)->update(['is_default' => 0]);
             $m->where('id', $id)->update(['is_default' => 1]);
             $this->strm115_cfg_upsert('strm115', 'default_account_id', (string)$id);
@@ -2862,6 +2885,91 @@ $base = rtrim($baseUrl, '/');
         return json(['code'=>200,'data'=>['play_sig_enabled'=>$enabled,'play_sig_allow_legacy'=>$legacy,'play_sig_ttl'=>(string)$ttl]]);
     }
 
+    // GET /media/admin/strm115PreRefreshCfg
+    public function strm115PreRefreshCfg()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $enabled = $this->strm115_cfg_get('pre_refresh_enabled', '0');
+        $minLeft = $this->strm115_cfg_get('pre_refresh_min_left_min', '10');
+        if ($minLeft === '') $minLeft = '10';
+        return json(['code' => 200, 'data' => [
+            'pre_refresh_enabled' => $enabled,
+            'pre_refresh_min_left_min' => $minLeft,
+        ]]);
+    }
+
+    // POST /media/admin/strm115PreRefreshCfgSave
+    public function strm115PreRefreshCfgSave()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $payload = json_decode(Request::getContent(), true);
+        if (!is_array($payload)) $payload = [];
+        $enabled = !empty($payload['pre_refresh_enabled']) ? '1' : '0';
+        $minLeft = (int)($payload['pre_refresh_min_left_min'] ?? 10);
+        if ($minLeft < 1) $minLeft = 1;
+        if ($minLeft > 240) $minLeft = 240;
+        $this->strm115_cfg_upsert('strm115', 'pre_refresh_enabled', $enabled);
+        $this->strm115_cfg_upsert('strm115', 'pre_refresh_min_left_min', (string)$minLeft);
+        return json(['code' => 200, 'data' => ['pre_refresh_enabled' => $enabled, 'pre_refresh_min_left_min' => (string)$minLeft]]);
+    }
+
+    // GET /media/admin/strm115PreRefreshLogs
+    public function strm115PreRefreshLogs()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $dir = runtime_path() . 'strm115/logs/';
+        if (!is_dir($dir)) {
+            return json(['code' => 200, 'data' => []]);
+        }
+        $files = glob($dir . 'pre_refresh_*.log');
+        rsort($files);
+        $out = [];
+        foreach (array_slice($files, 0, 30) as $f) {
+            $out[] = [
+                'file' => basename($f),
+                'size' => filesize($f),
+                'mtime' => date('Y-m-d H:i:s', filemtime($f)),
+            ];
+        }
+        return json(['code' => 200, 'data' => $out]);
+    }
+
+    // GET /media/admin/strm115PreRefreshLog?file=xxx.log
+    public function strm115PreRefreshLog()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $file = basename((string)input('file', ''));
+        if ($file === '' || !str_ends_with($file, '.log')) {
+            return response('bad request', 400);
+        }
+        $path = runtime_path() . 'strm115/logs/' . $file;
+        if (!is_file($path)) {
+            return response('not found', 404);
+        }
+        $content = file_get_contents($path);
+        return response($content ?: '', 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+    }
+
+    // POST /media/admin/strm115PreRefreshRunOnce
+    public function strm115PreRefreshRunOnce()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        // run command in background-like mode (sync), but keep it simple.
+        $cmd = 'cd ' . escapeshellarg((string)root_path()) . ' && ' . PHP_BINARY . ' think strm115:preRefresh 2>&1';
+        $out = (string)shell_exec($cmd);
+        return json(['code' => 200, 'data' => ['output' => $out]]);
+    }
+
     // POST /media/admin/strm115TempLink  body: {fileId, baseUrl(optional)}
     public function strm115TempLink()
     {
@@ -3270,6 +3378,7 @@ $base = rtrim($baseUrl, '/');
                 $out[] = [
                     'id' => (int)$a['id'],
                     'name' => (string)($a['name'] ?? ''),
+                    'remark' => (string)($a['remark'] ?? ''),
                     'client_id' => (string)($a['client_id'] ?? ''),
                     'is_default' => (int)($a['is_default'] ?? 0),
                     'status' => (int)($a['status'] ?? 1),
@@ -3317,6 +3426,59 @@ $base = rtrim($baseUrl, '/');
             return json(['code' => 200, 'data' => ['ok' => 1]]);
         } catch (\Throwable $e) {
             return json(['code' => 500, 'message' => 'delete failed: ' . $e->getMessage()]);
+        }
+    }
+
+
+    // POST /media/admin/strm115AccountUpdate  body:{account_id,name?,remark?}
+    public function strm115AccountUpdate()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        $id = (int)($req['account_id'] ?? 0);
+        if ($id <= 0) return json(['code' => 400, 'message' => 'account_id 不能为空']);
+        $name = array_key_exists('name', $req) ? trim((string)$req['name']) : null;
+        $remark = array_key_exists('remark', $req) ? trim((string)$req['remark']) : null;
+
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $row = $m->where('id', $id)->find();
+            if (!$row) return json(['code' => 404, 'message' => 'not found']);
+            $upd = [];
+            if ($name !== null) $upd['name'] = $name !== '' ? $name : '115';
+            if ($remark !== null) $upd['remark'] = $remark;
+            if (!$upd) return json(['code' => 200, 'data' => ['ok' => 1]]);
+            $m->where('id', $id)->update($upd);
+            return json(['code' => 200, 'data' => ['ok' => 1]]);
+        } catch (\Throwable $e) {
+            return json(['code' => 500, 'message' => 'update failed: ' . $e->getMessage()]);
+        }
+    }
+
+    // POST /media/admin/strm115AccountToggle  body:{account_id,status}
+    public function strm115AccountToggle()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        $id = (int)($req['account_id'] ?? 0);
+        $status = isset($req['status']) ? (int)$req['status'] : -1;
+        if ($id <= 0) return json(['code' => 400, 'message' => 'account_id 不能为空']);
+        if ($status !== 0 && $status !== 1) return json(['code' => 400, 'message' => 'status must be 0/1']);
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $row = $m->where('id', $id)->find();
+            if (!$row) return json(['code' => 404, 'message' => 'not found']);
+            if ((int)$row['is_default'] === 1 && $status === 0) {
+                return json(['code' => 400, 'message' => '默认账号不可停用（请先切换默认账号）']);
+            }
+            $m->where('id', $id)->update(['status' => $status]);
+            return json(['code' => 200, 'data' => ['ok' => 1]]);
+        } catch (\Throwable $e) {
+            return json(['code' => 500, 'message' => 'toggle failed: ' . $e->getMessage()]);
         }
     }
 

@@ -54,6 +54,7 @@ class StrmTask extends Command
         @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
 
         $srcDir = (string)($task['srcDir'] ?? '');
+        $srcBaseDir = (string)($task['srcBaseDir'] ?? '');
         $outDir = (string)($task['outDir'] ?? '');
         $baseUrl = (string)($task['baseUrl'] ?? '');
         $exts = (string)($task['exts'] ?? 'mkv,mp4,avi,mov,m4v');
@@ -63,6 +64,7 @@ class StrmTask extends Command
 
         $writeLog('taskId=' . $taskId);
         $writeLog('srcDir=' . $srcDir);
+        $writeLog('srcBaseDir=' . ($srcBaseDir !== '' ? $srcBaseDir : '(same as srcDir)'));
         $writeLog('outDir=' . $outDir);
         $writeLog('baseUrl=' . ($baseUrl !== '' ? $baseUrl : '(auto)'));
         $writeLog('exts=' . $exts);
@@ -72,13 +74,24 @@ class StrmTask extends Command
 
         $t0 = microtime(true);
 
-        $srcRootReal = realpath($srcDir);
-        if ($srcRootReal === false) {
+        $scanRootReal = realpath($srcDir);
+        $srcBaseReal = realpath($srcBaseDir !== '' ? $srcBaseDir : $srcDir);
+        if ($scanRootReal === false || $srcBaseReal === false) {
             $task['status'] = 'failed';
             $task['finishedAt'] = date('Y-m-d H:i:s');
             $task['error'] = '无法解析源目录';
             @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
             $writeLog('ERROR: 无法解析源目录');
+            return 3;
+        }
+        // ensure scan dir is under base dir
+        $basePrefix = rtrim($srcBaseReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (!str_starts_with(rtrim($scanRootReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR, $basePrefix)) {
+            $task['status'] = 'failed';
+            $task['finishedAt'] = date('Y-m-d H:i:s');
+            $task['error'] = 'scan dir not under base dir';
+            @file_put_contents($taskPath, json_encode($task, JSON_UNESCAPED_UNICODE));
+            $writeLog('ERROR: scan dir not under base dir');
             return 3;
         }
 
@@ -101,7 +114,7 @@ class StrmTask extends Command
 
         $expected = [];
 
-        $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($srcRootReal, \FilesystemIterator::SKIP_DOTS));
+        $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($scanRootReal, \FilesystemIterator::SKIP_DOTS));
         $i = 0;
         foreach ($rii as $file) {
             if (is_file($stopFile)) {
@@ -118,7 +131,7 @@ class StrmTask extends Command
             $absPath = $file->getRealPath();
             if (!$absPath) continue;
 
-            $rel = ltrim(str_replace($srcRootReal, '', $absPath), DIRECTORY_SEPARATOR);
+            $rel = ltrim(str_replace($srcBaseReal, '', $absPath), DIRECTORY_SEPARATOR);
             $outPath = rtrim($outDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . preg_replace('/\.[^.]+$/', '', $rel) . '.strm';
 
             $expected[$outPath] = 1;
