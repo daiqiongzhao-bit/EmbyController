@@ -1,23 +1,16 @@
 {include file="public/_header" /}
 
-
 <div class="flex-1 p-6">
   <div class="max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">115 功能配置</h1>
+      <div>
+        <h1 class="text-2xl font-bold">115 策略配置</h1>
+        <div class="text-xs text-gray-500 mt-1">账号授权（扫码/续期）请到「云存储管理」操作，本页不再重复展示授权组件。</div>
+      </div>
       <div class="text-xs text-gray-400">当前版本：<?php echo env('APP_VERSION','unknown'); ?></div>
     </div>
 
-    <div class="bg-white/5 rounded-xl p-6 space-y-4">
-      <div class="text-sm text-gray-300">
-        说明：本页用于配置 115 的登录信息与默认根目录。当前版本先提供配置与页面骨架，后续版本会实现：
-        <ul class="list-disc pl-5 mt-2 space-y-1 text-gray-400">
-          <li>设备登录（B2）/扫码确认 + 自动续期</li>
-          <li>目录树浏览与选择根目录（cid）</li>
-          <li>基于 fileId 的 302 直链播放</li>
-        </ul>
-      </div>
-
+    <div class="bg-white/5 rounded-xl p-6 space-y-5">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-sm text-gray-300 mb-1">启用 115 功能</label>
@@ -25,7 +18,7 @@
             <input id="en" type="checkbox" class="accent-blue-500" {if isset($cfg.enabled) && $cfg.enabled==1}checked{/if} />
             <span class="text-sm text-gray-300">开启 / 关闭</span>
           </label>
-          <p class="text-xs text-gray-500 mt-1">关闭后不显示 115 相关功能入口与页面。</p>
+          <p class="text-xs text-gray-500 mt-1">关闭后将隐藏 115 相关菜单入口与页面。</p>
         </div>
         <div>
           <label class="block text-sm text-gray-300 mb-1">默认根目录（CID，可选）</label>
@@ -34,51 +27,14 @@
         </div>
       </div>
 
-      <div>
-        <label class="block text-sm text-gray-300 mb-1">115 Cookie（可选：用于手动登录）</label>
-        <textarea id="cookie" class="w-full min-h-[120px] px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="粘贴 Cookie。注意：敏感信息不会在日志中输出。">{$cfg.cookie|default=''}</textarea>
-      </div>
-
       <div class="flex items-center gap-3">
         <button id="btnSave" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 transition">保存</button>
-        <button id="btnB2Gen" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition">生成二维码(B2)</button>
-        <button id="btnB2Complete" class="px-4 py-2 rounded bg-white/10 hover:bg-white/20 transition" disabled>完成授权</button>
         <span id="status" class="text-sm text-gray-300"></span>
       </div>
 
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="bg-black/20 border border-white/10 rounded p-4">
-          <div class="text-sm text-gray-300 mb-2">扫码授权（115 开放平台 / B2）</div>
-          <div class="space-y-2">
-            <div>
-              <label class="block text-sm text-gray-300 mb-1">应用ID（client_id，可手动输入）</label>
-              <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：100195137" />
-              <p class="text-xs text-gray-500 mt-1">就是你之前那串 10019xxxx（VIDHUB、网易爆米花等）。</p>
-            </div>
-            <div>
-              <label class="block text-sm text-gray-300 mb-1">设备名称（可选）</label>
-              <input id="b2Name" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：我的115" value="115" />
-            </div>
-            <div class="text-xs text-gray-400">流程：生成二维码 → 115 App 扫码并确认 → 点击“完成授权”。</div>
-          </div>
-        </div>
-        <div class="bg-black/20 border border-white/10 rounded p-4">
-          <div class="text-sm text-gray-300 mb-2">二维码</div>
-          <div class="flex items-center gap-4">
-            <img id="qrImg" class="w-[180px] h-[180px] bg-black/30 rounded border border-white/10" alt="qr" />
-            <div class="text-sm text-gray-300">
-              <div>状态：<span id="qrStatus">未生成</span></div>
-              <div class="text-xs text-gray-400 mt-2">session：<span id="qrSession">-</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-<pre id="log" class="w-full min-h-[120px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
+      <pre id="log" class="w-full min-h-[120px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -101,312 +57,11 @@ document.getElementById('btnSave').addEventListener('click', async ()=>{
   const payload={
     enabled: document.getElementById('en').checked,
     root_cid: document.getElementById('rootCid').value.trim(),
-    cookie: document.getElementById('cookie').value.trim(),
   };
   const r = await postJson('/media/admin/strm115Save', payload);
   appendLog(JSON.stringify(r));
   document.getElementById('status').textContent='完成';
 });
-
-
-let b2Timer=null;
-let b2SessionId='';
-
-async function getJson(url){
-  const res = await fetch(url);
-  return await res.json();
-}
-
-function setQrStatus(t){
-  document.getElementById('qrStatus').textContent=t;
-}
-
-async function pollStatus(){
-  if(!b2SessionId) return;
-  try{
-    const r=await getJson('/media/admin/strm115B2Status?session_id='+encodeURIComponent(b2SessionId));
-    appendLog('status: '+JSON.stringify(r));
-    if(r && r.code===200){
-      const st = (r.data && r.data.status!=null) ? r.data.status : null;
-      if(st===0) setQrStatus('等待扫码');
-      else if(st===1) setQrStatus('已扫码，待确认');
-      else if(st===2) setQrStatus('已确认，可完成授权');
-      else if(st===-2) { setQrStatus('已取消'); stopPoll(); }
-      else setQrStatus('未知：'+st);
-      if(st===2){
-        document.getElementById('btnB2Complete').disabled=false;
-      }
-    } else {
-      setQrStatus('异常');
-    }
-  }catch(e){
-    appendLog('poll error: '+e);
-  }
-}
-
-function stopPoll(){
-  if(b2Timer){ clearInterval(b2Timer); b2Timer=null; }
-}
-
-document.getElementById('btnB2Gen').addEventListener('click', async ()=>{
-  const clientId=document.getElementById('b2ClientId').value.trim();
-  const name=document.getElementById('b2Name').value.trim() || '115';
-  if(!clientId){
-    rStatusMessage.error('client_id 不能为空');
-    return;
-  }
-  document.getElementById('btnB2Complete').disabled=true;
-  stopPoll();
-  setQrStatus('生成中...');
-  const r=await postJson('/media/admin/strm115B2Qr', {client_id: clientId, name});
-  appendLog('gen: '+JSON.stringify(r));
-  if(r && r.code===200){
-    b2SessionId = r.data.session_id;
-    document.getElementById('qrSession').textContent=b2SessionId;
-    if (r.data.qr_png_base64) {
-      document.getElementById('qrImg').src = 'data:image/png;base64,'+r.data.qr_png_base64;
-    } else {
-    // fetch png with credentials to avoid cookie issues on <img>
-    fetch('/media/admin/strm115B2QrPng?session_id='+encodeURIComponent(b2SessionId)+'&_t='+(Date.now()), {credentials:'include'})
-      .then(r=>r.blob())
-      .then(b=>{ document.getElementById('qrImg').src = URL.createObjectURL(b); })
-      .catch(e=>{ appendLog('qr fetch error: '+e); });
-    }
-    setQrStatus('等待扫码');
-    b2Timer=setInterval(pollStatus, 2000);
-  } else {
-    setQrStatus('生成失败');
-  }
-});
-
-document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
-  if(!b2SessionId){ rStatusMessage.error('请先生成二维码'); return; }
-  const r=await postJson('/media/admin/strm115B2Complete', {session_id: b2SessionId});
-  appendLog('complete: '+JSON.stringify(r));
-  if(r && r.code===200){
-    setQrStatus('授权完成');
-    stopPoll();
-    rStatusMessage.success('授权完成');
-  } else {
-    rStatusMessage.error((r && r.message) ? r.message : '授权失败');
-  }
-});
-
-
-
-// ----- v013: 115 list + strm gen -----
-let _115_items = [];
-let _115_nav = []; // breadcrumb stack: [{cid,alt,name}]
-let _115_lastSig = "";
-
-function normItem(raw){
-  // try common field names
-  const fc = raw.fc ?? raw.file_category ?? raw.fileCategory;
-  const isDir = (raw.is_dir===1 || raw.is_dir==='1' || raw.is_dir===true) || (fc!=null && String(fc)==='0') || (raw.type==='dir');
-  return {
-    fileId: String(raw.file_id ?? raw.fid ?? raw.fileId ?? ''),
-    pickcode: String(raw.pick_code ?? raw.pc ?? raw.pickcode ?? ''),
-    name: String(raw.file_name ?? raw.fn ?? raw.name ?? ''),
-    isDir: !!isDir,
-    size: raw.size ?? raw.fs ?? ''
-  };
-}
-
-
-function setCrumb115(){
-  const el=document.getElementById('crumb');
-  if(!el) return;
-  const root = document.getElementById('rootCid115').value.trim() || '0';
-  if(!_115_nav.length){
-    el.textContent = `当前CID: ${document.getElementById('cid').value.trim()}（rootCid: ${root||'-'}）`;
-    return;
-  }
-  const parts = _115_nav.map(x=>x.name||x.cid);
-  el.textContent = parts.join(' / ');
-}
-
-function navTo115(cid, name){
-  document.getElementById('cid').value = String(cid);
-  document.getElementById('offset').value = '0';
-  if(name){
-    _115_nav.push({cid:String(cid), name:String(name)});
-  } else {
-    _115_nav.push({cid:String(cid), name:String(cid)});
-  }
-  load115List();
-}
-
-function navRoot115(){
-  _115_nav = [];
-  const root = document.getElementById('rootCid115').value.trim();
-  document.getElementById('cid').value = root || '0';
-  document.getElementById('offset').value = '0';
-  load115List();
-}
-
-function navUp115(){
-  if(_115_nav.length){
-    _115_nav.pop();
-  }
-  if(_115_nav.length){
-    const last=_115_nav[_115_nav.length-1];
-    document.getElementById('cid').value = last.cid;
-  } else {
-    const root = document.getElementById('rootCid115').value.trim();
-    document.getElementById('cid').value = root || '0';
-  }
-  document.getElementById('offset').value = '0';
-  load115List();
-}
-
-async function load115List(){
-  const cid = document.getElementById('cid').value.trim();
-  const offset = document.getElementById('offset').value.trim();
-  const limit = document.getElementById('limit').value.trim();
-  document.getElementById('listSummary').textContent='加载中...';
-  const res = await fetch(`/media/admin/strm115B2List?cid=${encodeURIComponent(cid)}&offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}`);
-  const j = await res.json().catch(()=>({code:500,message:'json parse failed'}));
-  if (!j || j.code!==200) {
-    document.getElementById('listSummary').textContent = '加载失败：'+(j.message||res.status);
-    return;
-  }
-  // 115 response shape may differ; try find list
-  let arr = [];
-  const data = j.data || {};
-  if (Array.isArray(data.data)) arr = data.data;
-  else if (Array.isArray(data.files)) arr = data.files;
-  else if (Array.isArray(data.data?.list)) arr = data.data.list;
-  else if (Array.isArray(data.data?.files)) arr = data.data.files;
-  else if (Array.isArray(data.data?.data)) arr = data.data.data;
-
-  _115_items = arr.map(normItem).filter(it=>it.fileId && it.name);
-
-  const dirs = _115_items.filter(x=>x.isDir).length;
-  const files = _115_items.filter(x=>!x.isDir).length;
-  document.getElementById('listSummary').textContent = `共 ${_115_items.length} 项（文件夹 ${dirs}，文件 ${files}）`;
-
-  render115List();
-  updateSig115();
-  setCrumb115();
-}
-
-function updateSig115(){
-  try{
-    _115_lastSig = _115_items.map(x=>`${x.isDir?"d":"f"}:${x.fileId}:${x.cid}:${x.name}`).join("|");
-  }catch(e){_115_lastSig="";}
-}
-
-async function enterDir115(it){
-  const prevSig = _115_lastSig;
-  const primary = (it.cid||it.fileId);
-  const alt = (it.fileId||it.cid);
-  // try primary
-  _115_nav.push({cid:String(primary), alt:String(alt||""), name:String(it.name||primary)});
-  document.getElementById('cid').value = String(primary);
-  document.getElementById('offset').value = "0";
-  await load115List();
-  if (alt && alt !== primary && _115_lastSig === prevSig) {
-    // fallback to alt id
-    _115_nav[_115_nav.length-1].cid = String(alt);
-    document.getElementById('cid').value = String(alt);
-    document.getElementById('offset').value = "0";
-    await load115List();
-  }
-}
-
-function render115List(){
-  const box = document.getElementById('fileList');
-  box.innerHTML = '';
-  if (!_115_items.length) {
-    box.innerHTML = '<div class="text-xs text-gray-500 p-2">暂无数据</div>';
-    return;
-  }
-
-  // dirs first
-  const dirs = _115_items.filter(x=>x.isDir);
-  const files = _115_items.filter(x=>!x.isDir);
-
-  const mkRow = (html) => {
-    const row = document.createElement('div');
-    row.className = 'flex items-center gap-2 px-2 py-1 hover:bg-white/5 rounded';
-    row.innerHTML = html;
-    return row;
-  };
-
-  for (const it of dirs) {
-    const row = mkRow(`
-      <button class="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10" title="进入" data-cid="${escapeHtml(it.fileId)}">进入</button>
-      <span class="text-gray-400">📁</span>
-      <span class="text-sm text-gray-200 truncate" style="max-width:520px">${escapeHtml(it.name)}</span>
-      <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}  fid=${escapeHtml(it.fileId)}</span>
-    `);
-    row.querySelector('button').addEventListener('click', ()=>enterDir115(it));
-    // click anywhere on row (except button) also navigates
-    row.addEventListener('dblclick', ()=>enterDir115(it));
-    box.appendChild(row);
-  }
-
-  if (dirs.length && files.length) {
-    const sep = document.createElement('div');
-    sep.className = 'my-2 border-t border-white/10';
-    box.appendChild(sep);
-  }
-
-  for (const it of files) {
-    const row = mkRow(`
-      <input class="accent-blue-500" type="checkbox" data-fileid="${escapeHtml(it.fileId)}" data-name="${escapeHtml(it.name)}" />
-      <span class="text-gray-400">🎬</span>
-      <span class="text-sm text-gray-200 truncate" style="max-width:560px">${escapeHtml(it.name)}</span>
-      <span class="text-[11px] text-gray-600 ml-auto">cid=${escapeHtml(it.cid||it.fileId)}  fid=${escapeHtml(it.fileId)}</span>
-    `);
-    box.appendChild(row);
-  }
-}
-function selectAll115(on){
-  const box = document.getElementById('fileList');
-  box.querySelectorAll('input[type=checkbox]').forEach(cb=>{cb.checked=!!on;});
-}
-
-async function gen115Strm(){
-  const outDir = document.getElementById('outDir115').value.trim();
-  const baseUrl = document.getElementById('baseUrl115').value.trim();
-  const mode = document.getElementById('mode115').value;
-  const rootCid = document.getElementById('rootCid115').value.trim();
-
-  const box = document.getElementById('fileList');
-  const sel = [];
-  box.querySelectorAll('input[type=checkbox]:checked').forEach(cb=>{
-    sel.push({fileId: cb.getAttribute('data-fileid'), name: cb.getAttribute('data-name')});
-  });
-  if (!sel.length) {
-    document.getElementById('genSummary').textContent = '请先勾选文件';
-    return;
-  }
-  if (!outDir || !baseUrl) {
-    document.getElementById('genSummary').textContent = 'outDir/baseUrl 不能为空';
-    return;
-  }
-  document.getElementById('genSummary').textContent = '生成中...';
-
-  const r = await postJson('/media/admin/strm115GenStrm', {outDir, baseUrl, items: sel, mode, rootCid});
-  if (!r || r.code!==200) {
-    document.getElementById('genSummary').textContent = '生成失败：'+(r.message||'');
-    return;
-  }
-  document.getElementById('genSummary').textContent = `已生成 ${r.data.count} 个，输出目录：${outDir}`;
-  appendLog('gen115: '+JSON.stringify(r));
-}
-
-document.getElementById('rootCid115').addEventListener('change', ()=>{
-  const v=document.getElementById('rootCid115').value.trim();
-  if(v){ document.getElementById('cid').value=v; }
-  _115_nav=[];
-  setCrumb115();
-});
-
-function escapeHtml(str){
-  return String(str).replace(/[&<>"]/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[s]));
-}
 </script>
 
 {include file="public/_footer" /}

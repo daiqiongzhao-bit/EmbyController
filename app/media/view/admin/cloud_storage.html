@@ -2,74 +2,100 @@
 
 <div class="flex-1 p-6">
   <div class="max-w-6xl mx-auto">
-    <div class="flex items-center justify-between mb-5">
+    <div class="flex items-start justify-between gap-4 mb-5">
       <div>
         <h1 class="text-2xl font-bold">云存储管理</h1>
-        <div class="text-xs text-gray-500 mt-1">版本：<?php echo env('APP_VERSION','unknown'); ?></div>
+        <div class="text-xs text-gray-500 mt-1">账号/授权中心（支持多账号扩展）。版本：<?php echo env('APP_VERSION','unknown'); ?></div>
       </div>
       <div class="flex items-center gap-2">
         <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshStatus()">刷新状态</button>
+        <button class="px-3 py-2 rounded bg-blue-600 hover:bg-blue-500 text-sm" onclick="openAuthModal()">新增 / 授权</button>
       </div>
     </div>
 
-    <div class="bg-white/5 rounded-xl p-5">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-        <div class="bg-black/20 border border-white/10 rounded p-4">
-          <div class="text-xs text-gray-500">115 授权状态</div>
-          <div class="text-lg font-semibold mt-1" id="stAuth">-</div>
-          <div class="text-[11px] text-gray-500 mt-1" id="stExp">-</div>
-        </div>
-        <div class="bg-black/20 border border-white/10 rounded p-4 min-w-0">
-          <div class="text-xs text-gray-500">Access Token（已脱敏）</div>
-          <div class="text-sm mt-1 break-all whitespace-normal" id="stAccess" title="">-</div>
-        </div>
-        <div class="bg-black/20 border border-white/10 rounded p-4 min-w-0">
-          <div class="text-xs text-gray-500">Refresh Token（已脱敏）</div>
-          <div class="text-sm mt-1 break-all whitespace-normal" id="stRefresh" title="">-</div>
-        </div>
-        <div class="bg-black/20 border border-white/10 rounded p-4 min-w-0">
-          <div class="text-xs text-gray-500">播放安全</div>
-          <div class="text-sm mt-1" id="stSig">-</div>
-          <div class="text-[11px] text-gray-500 mt-1">菜单里也能打开安全配置页</div>
+    <div class="bg-white/5 rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-black/20 text-gray-300">
+            <tr>
+              <th class="text-left px-4 py-3">类型</th>
+              <th class="text-left px-4 py-3">名称</th>
+              <th class="text-left px-4 py-3">授权状态</th>
+              <th class="text-left px-4 py-3">过期时间</th>
+              <th class="text-left px-4 py-3 min-w-[220px]">Token（脱敏）</th>
+              <th class="text-right px-4 py-3">操作</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/10" id="tb">
+            <tr class="text-gray-200">
+              <td class="px-4 py-4">115</td>
+              <td class="px-4 py-4">115（默认）</td>
+              <td class="px-4 py-4" id="stAuth">-</td>
+              <td class="px-4 py-4" id="stExp">-</td>
+              <td class="px-4 py-4 min-w-0">
+                <div class="text-xs text-gray-400">Access</div>
+                <div class="break-all whitespace-normal" id="stAccess" title="">-</div>
+                <div class="text-xs text-gray-400 mt-2">Refresh</div>
+                <div class="break-all whitespace-normal" id="stRefresh" title="">-</div>
+              </td>
+              <td class="px-4 py-4 text-right whitespace-nowrap">
+                <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="openAuthModal()">授权/续期</button>
+                <a class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20 inline-block" href="/media/admin/strm115Security" target="_blank">安全</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="px-4 py-3 text-xs text-gray-500 border-t border-white/10">
+        说明：CloudDrive2 / MoviePilot2 等发送端请到「Webhook 集成」页面配置接收地址与密钥。
+      </div>
+    </div>
+
+    <pre id="log" class="mt-4 w-full hidden min-h-[80px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
+    <button class="mt-2 text-xs text-blue-400 underline" onclick="toggleLog()">展开/收起日志</button>
+  </div>
+</div>
+
+<!-- 授权弹窗（Film Fusion：不在页面常驻大二维码） -->
+<div id="authModal" class="fixed inset-0 hidden items-center justify-center z-50">
+  <div class="absolute inset-0 bg-black/70" onclick="closeAuthModal()"></div>
+  <div class="relative w-[95vw] max-w-3xl bg-[#0b1220] border border-white/10 rounded-2xl shadow-xl">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div>
+        <div class="text-lg font-semibold">115 扫码授权</div>
+        <div class="text-xs text-gray-400 mt-1">选择常用 AppID 或手动输入 → 生成二维码 → 扫码确认 → 完成授权</div>
+      </div>
+      <button class="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onclick="closeAuthModal()">关闭</button>
+    </div>
+
+    <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">AppID / ClientID</label>
+        <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="可手动输入，例如 100195137" />
+        <div class="mt-2 flex flex-wrap gap-2" id="cidQuick"></div>
+        <p class="text-[11px] text-gray-500 mt-1">常用项点一下会自动填入；也可直接粘贴数字。</p>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">二维码</label>
+        <div class="flex items-center gap-3">
+          <img id="qrImg" class="w-[160px] h-[160px] bg-black/30 rounded border border-white/10" alt="qr" />
+          <div class="text-sm text-gray-300">
+            <div>状态：<span id="qrStatus">未生成</span></div>
+            <div class="text-[11px] text-gray-500 mt-2">session：<span id="qrSession">-</span></div>
+          </div>
         </div>
       </div>
 
-      <div class="border-t border-white/10 pt-4">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-sm font-semibold">115 网盘（扫码授权）</div>
-          <div class="text-xs text-gray-500">提示：选择常用 AppID 或手动输入 → 生成二维码 → 扫码确认 → 完成授权</div>
+      <div>
+        <label class="block text-sm text-gray-300 mb-1">操作</label>
+        <div class="flex flex-wrap gap-2">
+          <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" id="btnB2Gen">生成二维码</button>
+          <button class="px-4 py-2 rounded bg-green-600 hover:bg-green-500" id="btnB2Complete" disabled>完成授权</button>
         </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label class="block text-sm text-gray-300 mb-1">AppID / ClientID</label>
-            <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="可手动输入，例如 100195137" />
-            <div class="mt-2 flex flex-wrap gap-2" id="cidQuick"></div>
-            <p class="text-[11px] text-gray-500 mt-1">常用项点一下会自动填入；你也可以直接粘贴数字。</p>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-300 mb-1">二维码</label>
-            <div class="flex items-center gap-3">
-              <img id="qrImg" class="w-[160px] h-[160px] bg-black/30 rounded border border-white/10" alt="qr" />
-              <div class="text-sm text-gray-300">
-                <div>状态：<span id="qrStatus">未生成</span></div>
-                <div class="text-[11px] text-gray-500 mt-2">session：<span id="qrSession">-</span></div>
-              </div>
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm text-gray-300 mb-1">操作</label>
-            <div class="flex flex-wrap gap-2">
-              <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" id="btnB2Gen">生成二维码</button>
-              <button class="px-4 py-2 rounded bg-green-600 hover:bg-green-500" id="btnB2Complete" disabled>完成授权</button>
-              <a class="px-4 py-2 rounded bg-white/10 hover:bg-white/20" href="/media/admin/strm115" target="_blank">更多配置</a>
-            </div>
-            <p class="text-[11px] text-gray-500 mt-2">如果你扫码后这里一直不变，点一次“刷新状态”。</p>
-          </div>
-        </div>
-
-        <pre id="log" class="mt-4 w-full hidden min-h-[80px] p-3 rounded bg-black/40 border border-white/10 text-xs overflow-auto"></pre>
-        <button class="mt-2 text-xs text-blue-400 underline" onclick="toggleLog()">展开/收起日志</button>
+        <p class="text-[11px] text-gray-500 mt-2">扫码后如状态不变化，等待 2 秒自动轮询或点“刷新状态”。</p>
+        <button class="mt-3 px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshStatus()">刷新状态</button>
       </div>
     </div>
   </div>
@@ -84,6 +110,18 @@ async function postJson(url, data){
 }
 async function getJson(url){ const res=await fetch(url); return await res.json(); }
 
+function openAuthModal(){
+  const m=document.getElementById('authModal');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+}
+function closeAuthModal(){
+  stopPoll();
+  const m=document.getElementById('authModal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+
 const commonClientIds = [
   {id:'100195145', name:'Filebar'},
   {id:'100195147', name:'cineultra'},
@@ -97,6 +135,7 @@ const commonClientIds = [
 ];
 (function(){
   const box=document.getElementById('cidQuick');
+  if(!box) return;
   commonClientIds.forEach(x=>{
     const b=document.createElement('button');
     b.className='px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-xs';
@@ -107,30 +146,28 @@ const commonClientIds = [
 })();
 
 async function refreshStatus(){
-  const j = await getJson('/media/admin/strm115Status');
+  const j = await getJson('/media/admin/strm115Status').catch(()=>null);
+  appendLog('status: '+JSON.stringify(j));
   if (!j || j.code!==200) return;
   const d=j.data||{};
   document.getElementById('stAuth').textContent = d.authorized ? '已授权' : '未授权';
-  document.getElementById('stExp').textContent = d.expires_at ? ('过期时间：'+d.expires_at) : '';
+  document.getElementById('stExp').textContent = d.expires_at ? d.expires_at : '-';
   const a=(d.access_masked || '-');
   const r=(d.refresh_masked || '-');
   const ea=document.getElementById('stAccess');
   const er=document.getElementById('stRefresh');
-  ea.textContent = a;
-  er.textContent = r;
-  ea.title = a;
-  er.title = r;
-  document.getElementById('stSig').textContent = d.play_sig_enabled==='1' ? ('签名校验：开启（有效期 '+ (d.play_sig_ttl||'') +' 秒）') : '签名校验：关闭';
+  ea.textContent = a; er.textContent = r;
+  ea.title = a; er.title = r;
 }
 
 let b2Timer=null; let b2SessionId='';
-function setQrStatus(t){ document.getElementById('qrStatus').textContent=t; }
+function setQrStatus(t){ const el=document.getElementById('qrStatus'); if(el) el.textContent=t; }
 function stopPoll(){ if(b2Timer){ clearInterval(b2Timer); b2Timer=null; } }
 async function pollStatus(){
   if(!b2SessionId) return;
   const r=await getJson('/media/admin/strm115B2Status?session_id='+encodeURIComponent(b2SessionId)).catch(()=>null);
   if(!r){ setQrStatus('异常'); return; }
-  appendLog('status: '+JSON.stringify(r));
+  appendLog('b2status: '+JSON.stringify(r));
   if(r.code===200){
     const st = (r.data && r.data.status!=null) ? r.data.status : null;
     if(st===0) setQrStatus('等待扫码');
@@ -151,13 +188,15 @@ document.getElementById('btnB2Gen').addEventListener('click', async ()=>{
   stopPoll();
   setQrStatus('生成中...');
   const r=await postJson('/media/admin/strm115B2Qr', {client_id: clientId, name:'115'});
-  appendLog('gen: '+JSON.stringify(r));
+  appendLog('b2gen: '+JSON.stringify(r));
   if(r && r.code===200){
     b2SessionId = r.data.session_id;
     document.getElementById('qrSession').textContent=b2SessionId;
-    if (r.data.qr_png_base64) {
-      document.getElementById('qrImg').src = 'data:image/png;base64,'+r.data.qr_png_base64;
-    }
+    // Use PNG endpoint for mobile compatibility
+    fetch('/media/admin/strm115B2QrPng?session_id='+encodeURIComponent(b2SessionId)+'&_t='+(Date.now()), {credentials:'include'})
+      .then(r=>r.blob())
+      .then(b=>{ document.getElementById('qrImg').src = URL.createObjectURL(b); })
+      .catch(e=>{ appendLog('qr fetch error: '+e); });
     setQrStatus('等待扫码');
     b2Timer=setInterval(pollStatus, 2000);
   } else {
@@ -168,12 +207,13 @@ document.getElementById('btnB2Gen').addEventListener('click', async ()=>{
 document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
   if(!b2SessionId){ alert('请先生成二维码'); return; }
   const r=await postJson('/media/admin/strm115B2Complete', {session_id: b2SessionId});
-  appendLog('complete: '+JSON.stringify(r));
+  appendLog('b2complete: '+JSON.stringify(r));
   if(r && r.code===200){
     setQrStatus('授权完成');
     stopPoll();
     await refreshStatus();
     alert('授权完成');
+    closeAuthModal();
   } else {
     alert((r && r.message) ? r.message : '授权失败');
   }

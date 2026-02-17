@@ -1958,7 +1958,6 @@ public function strmTaskStart()
         View::assign('cfg', [
             'enabled' => (int)$get('enabled','0'),
             'root_cid' => $get('root_cid',''),
-            'cookie' => $get('cookie',''),
         ]);
         return View::fetch('admin/strm_115');
     }
@@ -1972,7 +1971,6 @@ public function strmTaskStart()
         $req = json_decode((string)request()->getContent(), true) ?: [];
         $enabled = !empty($req['enabled']) ? '1' : '0';
         $rootCid = trim((string)($req['root_cid'] ?? ''));
-        $cookie = (string)($req['cookie'] ?? '');
 
         $cfg = new SysConfigModel();
         $upsert = function($key, $val) use ($cfg) {
@@ -1985,7 +1983,6 @@ public function strmTaskStart()
         };
         $upsert('enabled', $enabled);
         $upsert('root_cid', $rootCid);
-        $upsert('cookie', $cookie);
 
         return json(['code'=>200,'data'=>['ok'=>1]]);
     }
