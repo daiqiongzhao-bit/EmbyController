@@ -2056,9 +2056,68 @@ public function strmTaskStart()
         return $default;
     }
 
-    private function strm115_open_get($path, array $qs = [], $timeoutSec = 20, $retry = true)
+    private function strm115_account_default_id()
     {
-        $token = $this->strm115_cfg_get('b2_access_token', '');
+        // 1) config override
+        $cfgId = (int)$this->strm115_cfg_get('default_account_id', '0');
+        if ($cfgId > 0) return $cfgId;
+
+        // 2) table default flag
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $row = $m->where('is_default', 1)->order('id', 'asc')->find();
+            if ($row) return (int)$row['id'];
+        } catch (\Throwable $e) {}
+        return 0;
+    }
+
+    private function strm115_account_get($accountId = null)
+    {
+        $id = $accountId === null ? 0 : (int)$accountId;
+        if ($id <= 0) {
+            $id = $this->strm115_account_default_id();
+        }
+        if ($id <= 0) return [];
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $row = $m->where('id', $id)->find();
+            return $row ? $row->toArray() : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function strm115_account_set_default($accountId)
+    {
+        $id = (int)$accountId;
+        if ($id <= 0) return false;
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $m->where('is_default', 1)->update(['is_default' => 0]);
+            $m->where('id', $id)->update(['is_default' => 1]);
+            $this->strm115_cfg_upsert('strm115', 'default_account_id', (string)$id);
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    private function strm115_mask_token($t)
+    {
+        $t = (string)$t;
+        if ($t === '') return '';
+        if (strlen($t) <= 10) return '***';
+        return substr($t, 0, 5) . '...' . substr($t, -5);
+    }
+
+    private function strm115_open_get($path, array $qs = [], $timeoutSec = 20, $retry = true, $accountId = null)
+    {
+        $acc = $this->strm115_account_get($accountId);
+        $token = (string)($acc['access_token'] ?? '');
+        if ($token === '') {
+            // backward compatible: read legacy sys_config
+            $token = $this->strm115_cfg_get('b2_access_token', '');
+        }
         if ($token === '') {
             return [false, 0, null, 'missing token'];
         }
@@ -2092,9 +2151,9 @@ public function strmTaskStart()
 
         // Auto refresh on 401 once
         if ($retry && $code === 401) {
-            $r = $this->strm115_refresh_access_token();
+            $r = $this->strm115_refresh_access_token($accountId);
             if ($r['ok']) {
-                return $this->strm115_open_get($path, $qs, $timeoutSec, false);
+                return $this->strm115_open_get($path, $qs, $timeoutSec, false, $accountId);
             }
         }
 
@@ -2102,9 +2161,14 @@ public function strmTaskStart()
     }
 
     // Refresh access token using refresh_token
-    private function strm115_refresh_access_token()
+    private function strm115_refresh_access_token($accountId = null)
     {
-        $refresh = $this->strm115_cfg_get('b2_refresh_token', '');
+        $acc = $this->strm115_account_get($accountId);
+        $refresh = (string)($acc['refresh_token'] ?? '');
+        if ($refresh === '') {
+            // backward compatible
+            $refresh = $this->strm115_cfg_get('b2_refresh_token', '');
+        }
         if ($refresh === '') {
             return ['ok' => false, 'message' => 'missing refresh_token'];
         }
@@ -2127,6 +2191,30 @@ public function strmTaskStart()
         $data = $j['data'];
         $expiresIn = (int)($data['expires_in'] ?? 0);
         $expiresAt = $expiresIn > 0 ? (time() + $expiresIn) : 0;
+
+        // Update account table when possible
+        $id = $accountId === null ? 0 : (int)$accountId;
+        if ($id <= 0) {
+            $id = $this->strm115_account_default_id();
+        }
+        if ($id > 0) {
+            try {
+                $m = new \app\media\model\Strm115AccountModel();
+                $upd = [
+                    'access_token' => (string)$data['access_token'],
+                    'expires_in' => $expiresIn,
+                    'expires_at' => $expiresAt,
+                ];
+                if (isset($data['refresh_token']) && (string)$data['refresh_token'] !== '') {
+                    $upd['refresh_token'] = (string)$data['refresh_token'];
+                }
+                $m->where('id', $id)->update($upd);
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        // Backward compatible: also write legacy config (single-account)
         $this->strm115_cfg_upsert('strm115', 'b2_access_token', (string)$data['access_token']);
         if (isset($data['refresh_token']) && (string)$data['refresh_token'] !== '') {
             $this->strm115_cfg_upsert('strm115', 'b2_refresh_token', (string)$data['refresh_token']);
@@ -2232,6 +2320,7 @@ private function strm115_session_dir()
         }
         $clientId = (string)input('client_id', '');
         $name = (string)input('name', '115');
+        $accountId = (int)input('account_id', 0);
         if ($clientId === '') {
             return json(['code' => 400, 'message' => 'client_id 不能为空']);
         }
@@ -2271,6 +2360,7 @@ private function strm115_session_dir()
             'created_at' => time(),
             'client_id' => $clientId,
             'name' => $name,
+            'account_id' => $accountId,
             'code_verifier' => $codeVerifier,
             'uid' => (string)$data['uid'],
             'time' => (string)$data['time'],
@@ -2426,12 +2516,42 @@ private function strm115_session_dir()
         $expiresIn = (int)($data['expires_in'] ?? 0);
         $expiresAt = $expiresIn > 0 ? (time() + $expiresIn) : 0;
 
-        // persist to sys_config
-        $cfg = new \app\media\model\SysConfigModel();
+        // persist to strm115_account (multi-account)
+        $accId = (int)($sess['account_id'] ?? 0);
+        $accName = (string)($sess['name'] ?? '115');
+        $clientId = (string)($sess['client_id'] ?? '');
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $payload = [
+                'name' => $accName,
+                'client_id' => $clientId !== '' ? $clientId : null,
+                'access_token' => (string)$data['access_token'],
+                'refresh_token' => (string)($data['refresh_token'] ?? ''),
+                'expires_in' => $expiresIn,
+                'expires_at' => $expiresAt,
+                'status' => 1,
+            ];
+            if ($accId > 0) {
+                $m->where('id', $accId)->update($payload);
+            } else {
+                // create
+                $hasAny = (int)$m->count() > 0;
+                $payload['is_default'] = $hasAny ? 0 : 1;
+                $m->save($payload);
+                $accId = (int)$m->id;
+                if (!$hasAny && $accId > 0) {
+                    $this->strm115_cfg_upsert('strm115', 'default_account_id', (string)$accId);
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore and fallback to legacy config below
+        }
+
+        // Backward compatible: also persist to sys_config (single-account)
         $save = [
             'enabled' => 1,
-            'b2_client_id' => (string)$sess['client_id'],
-            'b2_name' => (string)$sess['name'],
+            'b2_client_id' => $clientId,
+            'b2_name' => $accName,
             'b2_access_token' => (string)$data['access_token'],
             'b2_refresh_token' => (string)($data['refresh_token'] ?? ''),
             'b2_expires_in' => $expiresIn,
@@ -2469,6 +2589,7 @@ private function strm115_session_dir()
         $cid = (string)input('cid', '0');
         $offset = (int)input('offset', 0);
         $limit = (int)input('limit', 200);
+        $accountId = (int)input('account_id', 0);
         if ($limit <= 0) $limit = 200;
         if ($limit > 500) $limit = 500;
 
@@ -2479,7 +2600,7 @@ private function strm115_session_dir()
             'show_dir' => 1,
             'stdir' => 1,
             'natsort' => 1,
-        ], 25);
+        ], 25, true, $accountId);
         if (!$ok) {
             return json(['code' => 500, 'message' => '115请求失败：' . $raw]);
         }
@@ -2530,6 +2651,7 @@ private function strm115_session_dir()
         $mode = (string)($payload['mode'] ?? 'url'); // url|kv
 
         $rootCid = trim((string)($payload['rootCid'] ?? ''));
+        $accountId = (int)($payload['accountId'] ?? 0);
 
 
         if ($outDir === '' || $baseUrl === '') {
@@ -2581,9 +2703,12 @@ $base = rtrim($baseUrl, '/');
             $outPath = rtrim($outDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $safeName;
 
             if ($mode === 'kv') {
-                $content = 'provider=115,fileId=' . $fileId;
+                $content = 'provider=115,' . ($accountId>0 ? ('accountId='.$accountId.',') : '') . 'fileId=' . $fileId;
             } else {
                 $content = $base . '/media/strm115/redirect?fileId=' . rawurlencode($fileId) . '&token=' . rawurlencode($secret);
+                if ($accountId > 0) {
+                    $content .= '&acc=' . rawurlencode((string)$accountId);
+                }
             }
 
             if (@file_put_contents($outPath, $content) === false) {
@@ -2766,12 +2891,18 @@ $base = rtrim($baseUrl, '/');
         }
         $ts = (string)time();
         $pickcode = '';
+        $accountId = (int)($payload['accountId'] ?? 0);
         $sig = hash_hmac('sha256', $fileId . '|' . $pickcode . '|' . $ts, $secret);
-        $url = $baseUrl . '/media/strm115/redirect?' . http_build_query([
+        $qs = [
             'fileId' => $fileId,
             'ts' => $ts,
             'sig' => $sig,
-        ]);
+        ];
+        if ($accountId > 0) {
+            $qs['acc'] = $accountId;
+        }
+        $url = $baseUrl . '/media/strm115/redirect?' . http_build_query($qs);
+
         return json(['code'=>200,'data'=>['url'=>$url,'ts'=>$ts]]);
     }
 
@@ -2804,6 +2935,7 @@ $base = rtrim($baseUrl, '/');
         $baseUrl = trim((string)($payload['baseUrl'] ?? ''));
         $mode = (string)($payload['mode'] ?? 'url');
         $rootCid = trim((string)($payload['rootCid'] ?? ''));
+        $accountId = (int)($payload['accountId'] ?? 0);
         $recursive = (int)($payload['recursive'] ?? 1);
         $maxDepth = (int)($payload['maxDepth'] ?? 6);
         $maxFiles = (int)($payload['maxFiles'] ?? 3000);
@@ -2819,7 +2951,7 @@ $base = rtrim($baseUrl, '/');
             }
         }
 
-        $r = $this->strm115GenStrmFromFolder_impl($cid, $folderName, $outDir, $baseUrl, $mode, $rootCid, $recursive, $maxDepth, $maxFiles);
+        $r = $this->strm115GenStrmFromFolder_impl($cid, $folderName, $outDir, $baseUrl, $mode, $rootCid, $recursive, $maxDepth, $maxFiles, $accountId);
         return json(['code'=>200,'data'=>[
             'count'=>$r['count'],
             'written'=>$r['written'],
@@ -2828,6 +2960,136 @@ $base = rtrim($baseUrl, '/');
         ]]);
     }
 
+    /**
+     * Internal: Generate STRM files from a 115 folder.
+     *
+     * @return array{count:int,written:array,dirsVisited:int,subtitleDownloaded:int}
+     */
+    private function strm115GenStrmFromFolder_impl($cid, $folderName, $outDir, $baseUrl, $mode, $rootCid, $recursive, $maxDepth, $maxFiles, $accountId = 0)
+    {
+        $cid = (string)$cid;
+        $outDir = rtrim((string)$outDir, DIRECTORY_SEPARATOR);
+        $baseUrl = rtrim((string)$baseUrl, '/');
+        $mode = (string)$mode;
+        $rootCid = (string)$rootCid;
+        $recursive = (int)$recursive;
+        $maxDepth = (int)$maxDepth;
+        if ($maxDepth <= 0) $maxDepth = 6;
+        $maxFiles = (int)$maxFiles;
+        if ($maxFiles <= 0) $maxFiles = 3000;
+        $accountId = (int)$accountId;
+
+        // ensure play secret
+        $secret = $this->strm115_cfg_get('play_secret', '');
+        if ($secret === '') {
+            $secret = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
+            $this->strm115_cfg_upsert('strm115', 'play_secret', $secret);
+        }
+
+        // allowlist roots
+        $allowDir = $this->strm115_cfg_get('allowlist_dir', '/app/runtime/media/strm115');
+        if (!is_dir($allowDir)) { @mkdir($allowDir, 0755, true); }
+        $allowPath = rtrim($allowDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'allowlist.json';
+        $allow = [];
+        if (is_file($allowPath)) { $tmp = json_decode(@file_get_contents($allowPath), true); if (is_array($tmp)) $allow = $tmp; }
+        if (!isset($allow['roots']) || !is_array($allow['roots'])) $allow['roots'] = [];
+        if ($rootCid !== '') {
+            $allow['root_cid'] = $rootCid;
+            if (!isset($allow['roots'][$rootCid]) || !is_array($allow['roots'][$rootCid])) $allow['roots'][$rootCid] = [];
+        }
+
+        $written = [];
+        $count = 0;
+        $dirsVisited = 0;
+        $subtitleDownloaded = 0;
+
+        $walk = function($cid, $depth, $prefix) use (&$walk, &$written, &$count, &$dirsVisited, $outDir, $baseUrl, $mode, $secret, $rootCid, &$allow, $maxDepth, $maxFiles, $recursive, $accountId) {
+            if ($count >= $maxFiles) return;
+            if ($depth > $maxDepth) return;
+
+            $dirsVisited++;
+
+            $offset = 0;
+            $limit = 500;
+            while (true) {
+                if ($count >= $maxFiles) return;
+                [$ok, $http, $j, $raw] = $this->strm115_open_get('/open/ufile/files', [
+                    'cid' => (string)$cid,
+                    'offset' => $offset,
+                    'limit' => $limit,
+                    'show_dir' => 1,
+                    'stdir' => 1,
+                    'natsort' => 1,
+                ], 25, true, $accountId);
+                if (!$ok || $http >= 400 || !is_array($j)) {
+                    return;
+                }
+                $items = $j['data']['data'] ?? [];
+                if (!is_array($items) || !$items) {
+                    return;
+                }
+
+                foreach ($items as $it) {
+                    if ($count >= $maxFiles) return;
+                    if (!is_array($it)) continue;
+                    $isDir = (int)($it['is_dir'] ?? $it['isdir'] ?? 0) === 1;
+                    $name = (string)($it['n'] ?? $it['name'] ?? '');
+                    $fid = (string)($it['fid'] ?? $it['file_id'] ?? '');
+                    $cid2 = (string)($it['cid'] ?? $it['category_id'] ?? $it['file_id'] ?? '');
+
+                    if ($isDir) {
+                        if ($recursive) {
+                            $safe = preg_replace('/[\\\/\:\*\?\"\<\>\|]+/', '_', $name);
+                            $walk($cid2, $depth + 1, $prefix . $safe . DIRECTORY_SEPARATOR);
+                        }
+                        continue;
+                    }
+
+                    if ($fid === '') continue;
+                    $safeName = preg_replace('/[\\\/\:\*\?\"\<\>\|]+/', '_', $name);
+                    $safeName = trim($safeName);
+                    if ($safeName === '') $safeName = $fid;
+                    if (!preg_match('/\.strm$/i', $safeName)) {
+                        $safeName .= '.strm';
+                    }
+                    $targetDir = $outDir . DIRECTORY_SEPARATOR . $prefix;
+                    if (!is_dir($targetDir)) { @mkdir($targetDir, 0755, true); }
+                    $outPath = $targetDir . $safeName;
+
+                    if ($mode === 'kv') {
+                        $content = 'provider=115,' . ($accountId>0 ? ('accountId='.$accountId.',') : '') . 'fileId=' . $fid;
+                    } else {
+                        $content = $baseUrl . '/media/strm115/redirect?fileId=' . rawurlencode($fid) . '&token=' . rawurlencode($secret);
+                        if ($accountId > 0) $content .= '&acc=' . rawurlencode((string)$accountId);
+                    }
+
+                    if (@file_put_contents($outPath, $content) !== false) {
+                        $count++;
+                        if (count($written) < 50) $written[] = $outPath;
+                        if ($rootCid !== '') { $allow['roots'][$rootCid][$fid] = 1; }
+                    }
+                }
+
+                $offset += $limit;
+                $total = (int)($j['data']['count'] ?? 0);
+                if ($total <= 0) {
+                    // unknown, stop when less than limit
+                    if (count($items) < $limit) return;
+                } else {
+                    if ($offset >= $total) return;
+                }
+            }
+        };
+
+        $safeTop = preg_replace('/[\\\/\:\*\?\"\<\>\|]+/', '_', (string)$folderName);
+        $safeTop = trim($safeTop);
+        if ($safeTop === '') $safeTop = (string)$cid;
+        $walk($cid, 0, $safeTop . DIRECTORY_SEPARATOR);
+
+        @file_put_contents($allowPath, json_encode($allow, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+
+        return ['count'=>$count,'written'=>$written,'dirsVisited'=>$dirsVisited,'subtitleDownloaded'=>$subtitleDownloaded];
+    }
 
 
 
@@ -2956,6 +3218,7 @@ $base = rtrim($baseUrl, '/');
         $baseUrl = trim((string)($payload['baseUrl'] ?? ''));
         $mode = (string)($payload['mode'] ?? 'url');
         $rootCid = trim((string)($payload['rootCid'] ?? ''));
+        $accountId = (int)($payload['accountId'] ?? 0);
         $recursive = (int)($payload['recursive'] ?? 1);
         $maxDepth = (int)($payload['maxDepth'] ?? 8);
         $maxFiles = (int)($payload['maxFiles'] ?? 5000);
@@ -2970,7 +3233,7 @@ $base = rtrim($baseUrl, '/');
             if ($cid === '') continue;
 
             // call single-folder generator but with folder base name
-            $r = $this->strm115GenStrmFromFolder_impl($cid, $name, $outDir, $baseUrl, $mode, $rootCid, $recursive, $maxDepth, $maxFiles);
+            $r = $this->strm115GenStrmFromFolder_impl($cid, $name, $outDir, $baseUrl, $mode, $rootCid, $recursive, $maxDepth, $maxFiles, $accountId);
             if ($r['count'] > 0) {
                 $total += $r['count'];
             }
@@ -2992,15 +3255,82 @@ $base = rtrim($baseUrl, '/');
         return view('admin/cloud_storage');
     }
 
+    // GET /media/admin/strm115Accounts
+    public function strm115Accounts()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $rows = $m->order('is_default', 'desc')->order('id', 'asc')->select();
+            $out = [];
+            foreach ($rows as $r) {
+                $a = $r->toArray();
+                $out[] = [
+                    'id' => (int)$a['id'],
+                    'name' => (string)($a['name'] ?? ''),
+                    'client_id' => (string)($a['client_id'] ?? ''),
+                    'is_default' => (int)($a['is_default'] ?? 0),
+                    'status' => (int)($a['status'] ?? 1),
+                    'expires_at' => (int)($a['expires_at'] ?? 0),
+                    'access_masked' => $this->strm115_mask_token($a['access_token'] ?? ''),
+                    'refresh_masked' => $this->strm115_mask_token($a['refresh_token'] ?? ''),
+                ];
+            }
+            return json(['code' => 200, 'data' => ['items' => $out, 'default_account_id' => $this->strm115_account_default_id()]]);
+        } catch (\Throwable $e) {
+            return json(['code' => 500, 'message' => 'load accounts failed: ' . $e->getMessage()]);
+        }
+    }
+
+    // POST /media/admin/strm115AccountSetDefault  body:{account_id}
+    public function strm115AccountSetDefault()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        $id = (int)($req['account_id'] ?? 0);
+        if ($id <= 0) return json(['code' => 400, 'message' => 'account_id 不能为空']);
+        $ok = $this->strm115_account_set_default($id);
+        return json(['code' => $ok ? 200 : 500, 'data' => ['ok' => $ok ? 1 : 0]]);
+    }
+
+    // POST /media/admin/strm115AccountDelete  body:{account_id}
+    public function strm115AccountDelete()
+    {
+        if ($ret = $this->strm115_require_admin()) {
+            return $ret;
+        }
+        $req = json_decode((string)request()->getContent(), true) ?: [];
+        $id = (int)($req['account_id'] ?? 0);
+        if ($id <= 0) return json(['code' => 400, 'message' => 'account_id 不能为空']);
+        try {
+            $m = new \app\media\model\Strm115AccountModel();
+            $row = $m->where('id', $id)->find();
+            if (!$row) return json(['code' => 404, 'message' => 'not found']);
+            if ((int)$row['is_default'] === 1) {
+                return json(['code' => 400, 'message' => '默认账号不可删除（请先切换默认账号）']);
+            }
+            $m->where('id', $id)->delete();
+            return json(['code' => 200, 'data' => ['ok' => 1]]);
+        } catch (\Throwable $e) {
+            return json(['code' => 500, 'message' => 'delete failed: ' . $e->getMessage()]);
+        }
+    }
+
     // GET /media/admin/strm115Status
     public function strm115Status()
     {
         if ($ret = $this->strm115_require_admin()) {
             return $ret;
         }
-        $access = $this->strm115_cfg_get('b2_access_token', '');
-        $refresh = $this->strm115_cfg_get('b2_refresh_token', '');
-        $expiresAt = (int)$this->strm115_cfg_get('b2_expires_at', '0');
+        $accountId = (int)input('account_id', 0);
+        $acc = $this->strm115_account_get($accountId);
+        $access = (string)($acc['access_token'] ?? $this->strm115_cfg_get('b2_access_token', ''));
+        $refresh = (string)($acc['refresh_token'] ?? $this->strm115_cfg_get('b2_refresh_token', ''));
+        $expiresAt = (int)($acc['expires_at'] ?? $this->strm115_cfg_get('b2_expires_at', '0'));
         $sigEnabled = $this->strm115_cfg_get('play_sig_enabled', '0');
         $sigTtl = $this->strm115_cfg_get('play_sig_ttl', '600');
 

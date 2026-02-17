@@ -4,6 +4,7 @@ namespace app\media\controller;
 
 use app\BaseController;
 use app\media\model\SysConfigModel;
+use app\media\model\Strm115AccountModel;
 use think\facade\Request;
 
 class Strm115 extends BaseController
@@ -19,6 +20,32 @@ class Strm115 extends BaseController
         } catch (\Throwable $e) {
         }
         return $default;
+    }
+
+    private function account_default_id()
+    {
+        $cfgId = (int)$this->cfg_get('default_account_id', '0');
+        if ($cfgId > 0) return $cfgId;
+        try {
+            $m = new Strm115AccountModel();
+            $row = $m->where('is_default', 1)->order('id', 'asc')->find();
+            if ($row) return (int)$row['id'];
+        } catch (\Throwable $e) {}
+        return 0;
+    }
+
+    private function account_get($accountId = null)
+    {
+        $id = $accountId === null ? 0 : (int)$accountId;
+        if ($id <= 0) $id = $this->account_default_id();
+        if ($id <= 0) return [];
+        try {
+            $m = new Strm115AccountModel();
+            $row = $m->where('id', $id)->find();
+            return $row ? $row->toArray() : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     private function http_get_json($url, $timeoutSec = 20)
@@ -160,7 +187,9 @@ class Strm115 extends BaseController
             }
         }
 
-        $token = $this->cfg_get('b2_access_token', '');
+        $accId = (int)input('acc', 0);
+        $acc = $this->account_get($accId);
+        $token = (string)($acc['access_token'] ?? $this->cfg_get('b2_access_token', ''));
         if ($token === '') {
             return response('115 token missing', 500);
         }

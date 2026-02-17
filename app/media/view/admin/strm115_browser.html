@@ -21,6 +21,11 @@
           <p class="text-[11px] text-gray-500 mt-1">开启后：只允许 rootCid 内的文件播放/生成（越权 403）。</p>
         </div>
         <div class="md:col-span-2">
+          <label class="block text-sm text-gray-300 mb-1">使用账号</label>
+          <select id="accSel" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10"></select>
+          <p class="text-[11px] text-gray-500 mt-1">默认选“默认账号”。</p>
+        </div>
+        <div class="md:col-span-2">
           <label class="block text-sm text-gray-300 mb-1">当前目录（CID）</label>
           <input id="cid" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" value="0" />
         </div>
@@ -114,6 +119,28 @@ async function postJson(url, data){
   return await res.json();
 }
 
+// ----- account -----
+let _115_account_id = 0; // 0=default
+async function loadAccounts(){
+  const r = await fetch('/media/admin/strm115Accounts').then(r=>r.json()).catch(()=>null);
+  if(!r || r.code!==200) return;
+  const items = (r.data && r.data.items) ? r.data.items : [];
+  const sel = document.getElementById('accSel');
+  if(!sel) return;
+  sel.innerHTML='';
+  const op0=document.createElement('option');
+  op0.value='0';
+  op0.textContent='默认账号';
+  sel.appendChild(op0);
+  items.forEach(a=>{
+    const op=document.createElement('option');
+    op.value=String(a.id);
+    op.textContent = `${a.name || ('账号#'+a.id)}${a.is_default? '（默认）':''}`;
+    sel.appendChild(op);
+  });
+  sel.addEventListener('change', ()=>{ _115_account_id = Number(sel.value||0); });
+}
+
 // ----- browser state -----
 let _115_items = [];
 let _115_nav = []; // breadcrumb stack: [{cid,alt,name}]
@@ -179,7 +206,7 @@ async function load115List(){
   const offset = document.getElementById('offset').value.trim();
   const limit = document.getElementById('limit').value.trim();
   document.getElementById('listSummary').textContent='加载中...';
-  const res = await fetch(`/media/admin/strm115B2List?cid=${encodeURIComponent(cid)}&offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}`);
+  const res = await fetch(`/media/admin/strm115B2List?cid=${encodeURIComponent(cid)}&offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}&account_id=${encodeURIComponent(String(_115_account_id||0))}`);
   const j = await res.json().catch(()=>({code:500,message:'json parse failed'}));
   appendLog('list: '+JSON.stringify(j).slice(0, 2000));
   if (!j || j.code!==200) {
@@ -311,7 +338,7 @@ async function gen115Strm(){
   }
   document.getElementById('genSummary').textContent = '生成中...';
 
-  const r = await postJson('/media/admin/strm115GenStrm', {outDir, baseUrl, items: sel, mode, rootCid});
+  const r = await postJson('/media/admin/strm115GenStrm', {outDir, baseUrl, items: sel, mode, rootCid, accountId: (_115_account_id||0)});
   appendLog('gen115: '+JSON.stringify(r));
   if (!r || r.code!==200) {
     document.getElementById('genSummary').textContent = '生成失败：'+(r.message||'');
@@ -339,7 +366,7 @@ async function genSelectedFolders(){
     return;
   }
   document.getElementById('genSummary').textContent = "递归生成中...";
-  const r = await postJson('/media/admin/strm115GenStrmFromFolders', {folders, outDir, baseUrl, mode, rootCid, recursive:1, maxDepth:8, maxFiles:5000});
+  const r = await postJson('/media/admin/strm115GenStrmFromFolders', {folders, outDir, baseUrl, mode, rootCid, accountId: (_115_account_id||0), recursive:1, maxDepth:8, maxFiles:5000});
   appendLog('genFolders: ' + JSON.stringify(r).slice(0,2000));
   if(!r || r.code!==200){
     document.getElementById('genSummary').textContent = "生成失败："+(r.message||'');
@@ -363,6 +390,7 @@ async function genFolder115(it){
 
   const r = await postJson('/media/admin/strm115GenStrmFromFolder', {
     cid, outDir, baseUrl, mode, rootCid,
+    accountId: (_115_account_id||0),
     recursive: 1,
     maxDepth: 8,
     maxFiles: 5000
@@ -376,6 +404,8 @@ async function genFolder115(it){
 }
 
 // init behavior
+
+loadAccounts();
 
 document.getElementById('rootCid115').addEventListener('change', ()=>{
   const v=document.getElementById('rootCid115').value.trim();

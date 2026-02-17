@@ -5,10 +5,10 @@
     <div class="flex items-start justify-between gap-4 mb-5">
       <div>
         <h1 class="text-2xl font-bold">云存储管理</h1>
-        <div class="text-xs text-gray-500 mt-1">账号/授权中心（支持多账号扩展）。版本：<?php echo env('APP_VERSION','unknown'); ?></div>
+        <div class="text-xs text-gray-500 mt-1">账号/授权中心（115 多账号）。版本：<?php echo env('APP_VERSION','unknown'); ?></div>
       </div>
       <div class="flex items-center gap-2">
-        <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshStatus()">刷新状态</button>
+        <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshAll()">刷新</button>
         <button class="px-3 py-2 rounded bg-blue-600 hover:bg-blue-500 text-sm" onclick="openAuthModal()">新增 / 授权</button>
       </div>
     </div>
@@ -20,35 +20,19 @@
             <tr>
               <th class="text-left px-4 py-3">类型</th>
               <th class="text-left px-4 py-3">名称</th>
+              <th class="text-left px-4 py-3">默认</th>
               <th class="text-left px-4 py-3">授权状态</th>
               <th class="text-left px-4 py-3">过期时间</th>
               <th class="text-left px-4 py-3 min-w-[220px]">Token（脱敏）</th>
               <th class="text-right px-4 py-3">操作</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-white/10" id="tb">
-            <tr class="text-gray-200">
-              <td class="px-4 py-4">115</td>
-              <td class="px-4 py-4">115（默认）</td>
-              <td class="px-4 py-4" id="stAuth">-</td>
-              <td class="px-4 py-4" id="stExp">-</td>
-              <td class="px-4 py-4 min-w-0">
-                <div class="text-xs text-gray-400">Access</div>
-                <div class="break-all whitespace-normal" id="stAccess" title="">-</div>
-                <div class="text-xs text-gray-400 mt-2">Refresh</div>
-                <div class="break-all whitespace-normal" id="stRefresh" title="">-</div>
-              </td>
-              <td class="px-4 py-4 text-right whitespace-nowrap">
-                <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="openAuthModal()">授权/续期</button>
-                <a class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20 inline-block" href="/media/admin/strm115Security" target="_blank">安全</a>
-              </td>
-            </tr>
-          </tbody>
+          <tbody class="divide-y divide-white/10" id="tb"></tbody>
         </table>
       </div>
 
       <div class="px-4 py-3 text-xs text-gray-500 border-t border-white/10">
-        说明：CloudDrive2 / MoviePilot2 等发送端请到「Webhook 集成」页面配置接收地址与密钥。
+        说明：扫码授权会写入“选中的账号”。目录浏览/生成 STRM 默认使用“默认账号”，也可在页面切换。
       </div>
     </div>
 
@@ -57,28 +41,32 @@
   </div>
 </div>
 
-<!-- 授权弹窗（Film Fusion：不在页面常驻大二维码） -->
+<!-- 授权弹窗 -->
 <div id="authModal" class="fixed inset-0 hidden items-center justify-center z-50">
   <div class="absolute inset-0 bg-black/70" onclick="closeAuthModal()"></div>
   <div class="relative w-[95vw] max-w-3xl bg-[#0b1220] border border-white/10 rounded-2xl shadow-xl">
     <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
       <div>
         <div class="text-lg font-semibold">115 扫码授权</div>
-        <div class="text-xs text-gray-400 mt-1">选择常用 AppID 或手动输入 → 生成二维码 → 扫码确认 → 完成授权</div>
+        <div class="text-xs text-gray-400 mt-1">选择账号 → 填 AppID → 生成二维码 → 扫码确认 → 完成授权</div>
       </div>
       <button class="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onclick="closeAuthModal()">关闭</button>
     </div>
 
     <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
       <div>
-        <label class="block text-sm text-gray-300 mb-1">AppID / ClientID</label>
-        <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="可手动输入，例如 100195137" />
-        <div class="mt-2 flex flex-wrap gap-2" id="cidQuick"></div>
-        <p class="text-[11px] text-gray-500 mt-1">常用项点一下会自动填入；也可直接粘贴数字。</p>
+        <label class="block text-sm text-gray-300 mb-1">目标账号</label>
+        <select id="accSel" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10"></select>
+        <label class="block text-sm text-gray-300 mt-3 mb-1">账号显示名称</label>
+        <input id="accName" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="例如：主号 / 影视号" />
+        <p class="text-[11px] text-gray-500 mt-1">“新增账号”会在完成授权时自动创建。</p>
       </div>
 
       <div>
-        <label class="block text-sm text-gray-300 mb-1">二维码</label>
+        <label class="block text-sm text-gray-300 mb-1">AppID / ClientID</label>
+        <input id="b2ClientId" class="w-full px-3 py-2 rounded bg-black/30 border border-white/10" placeholder="可手动输入，例如 100195137" />
+        <div class="mt-2 flex flex-wrap gap-2" id="cidQuick"></div>
+        <label class="block text-sm text-gray-300 mt-4 mb-1">二维码</label>
         <div class="flex items-center gap-3">
           <img id="qrImg" class="w-[160px] h-[160px] bg-black/30 rounded border border-white/10" alt="qr" />
           <div class="text-sm text-gray-300">
@@ -94,8 +82,8 @@
           <button class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500" id="btnB2Gen">生成二维码</button>
           <button class="px-4 py-2 rounded bg-green-600 hover:bg-green-500" id="btnB2Complete" disabled>完成授权</button>
         </div>
-        <p class="text-[11px] text-gray-500 mt-2">扫码后如状态不变化，等待 2 秒自动轮询或点“刷新状态”。</p>
-        <button class="mt-3 px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshStatus()">刷新状态</button>
+        <p class="text-[11px] text-gray-500 mt-2">扫码后等待 2 秒自动轮询；或点“刷新”查看。</p>
+        <button class="mt-3 px-3 py-2 rounded bg-white/10 hover:bg-white/20 text-sm" onclick="refreshAll()">刷新</button>
       </div>
     </div>
   </div>
@@ -145,25 +133,119 @@ const commonClientIds = [
   });
 })();
 
-async function refreshStatus(){
-  const j = await getJson('/media/admin/strm115Status').catch(()=>null);
-  appendLog('status: '+JSON.stringify(j));
+let ACCS=[];
+function fmtTime(ts){
+  ts = Number(ts||0);
+  if(!ts) return '-';
+  const d = new Date(ts*1000);
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+async function loadAccounts(){
+  const r = await getJson('/media/admin/strm115Accounts').catch(()=>null);
+  appendLog('accounts: '+JSON.stringify(r));
+  if(!r || r.code!==200) return;
+  ACCS = (r.data && r.data.items) ? r.data.items : [];
+
+  // fill selector
+  const sel=document.getElementById('accSel');
+  sel.innerHTML='';
+  const optNew=document.createElement('option');
+  optNew.value='0';
+  optNew.textContent='新增账号（完成授权时创建）';
+  sel.appendChild(optNew);
+  ACCS.forEach(a=>{
+    const op=document.createElement('option');
+    op.value=String(a.id);
+    op.textContent = `${a.name || ('账号#'+a.id)}${a.is_default? '（默认）':''}`;
+    sel.appendChild(op);
+  });
+
+  // render table
+  const tb=document.getElementById('tb');
+  tb.innerHTML='';
+  if(!ACCS.length){
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td class="px-4 py-4 text-gray-400" colspan="7">暂无账号，请点击“新增 / 授权”。</td>`;
+    tb.appendChild(tr);
+    return;
+  }
+  ACCS.forEach(a=>{
+    const tr=document.createElement('tr');
+    tr.className='text-gray-200';
+    tr.innerHTML = `
+      <td class="px-4 py-4">115</td>
+      <td class="px-4 py-4">
+        <div class="font-medium">${(a.name||'-')}</div>
+        <div class="text-[11px] text-gray-500">ID: ${a.id}${a.client_id?(' · AppID: '+a.client_id):''}</div>
+      </td>
+      <td class="px-4 py-4">${a.is_default?'<span class="px-2 py-1 rounded bg-green-600/20 text-green-300 text-xs">默认</span>':'-'}</td>
+      <td class="px-4 py-4" id="stAuth_${a.id}">-</td>
+      <td class="px-4 py-4" id="stExp_${a.id}">-</td>
+      <td class="px-4 py-4 min-w-0">
+        <div class="text-xs text-gray-400">Access</div>
+        <div class="break-all whitespace-normal">${a.access_masked||'-'}</div>
+        <div class="text-xs text-gray-400 mt-2">Refresh</div>
+        <div class="break-all whitespace-normal">${a.refresh_masked||'-'}</div>
+      </td>
+      <td class="px-4 py-4 text-right whitespace-nowrap">
+        <button class="px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="openAuthFor(${a.id})">授权/续期</button>
+        ${a.is_default? '' : `<button class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20" onclick="setDefault(${a.id})">设为默认</button>`}
+        ${a.is_default? '' : `<button class="ml-2 px-3 py-2 rounded bg-red-600/20 hover:bg-red-600/30 text-red-200" onclick="delAcc(${a.id})">删除</button>`}
+        <a class="ml-2 px-3 py-2 rounded bg-white/10 hover:bg-white/20 inline-block" href="/media/admin/strm115Security" target="_blank">安全</a>
+      </td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
+async function refreshStatusOne(id){
+  const j = await getJson('/media/admin/strm115Status?account_id='+encodeURIComponent(String(id))).catch(()=>null);
+  appendLog('status('+id+'): '+JSON.stringify(j));
   if (!j || j.code!==200) return;
   const d=j.data||{};
-  document.getElementById('stAuth').textContent = d.authorized ? (d.expired ? '已过期' : '已授权') : '未授权';
-  if (d.expires_human) {
-    const left = (d.expires_left_sec!=null) ? Number(d.expires_left_sec) : 0;
-    const leftMin = Math.floor(left/60);
-    document.getElementById('stExp').textContent = `${d.expires_human}${d.expired ? '（已过期）' : `（剩余约 ${leftMin} 分钟）`}`;
-  } else {
-    document.getElementById('stExp').textContent = '-';
+  const stAuth=document.getElementById('stAuth_'+id);
+  const stExp=document.getElementById('stExp_'+id);
+  if(stAuth) stAuth.textContent = d.authorized ? (d.expired ? '已过期' : '已授权') : '未授权';
+  if(stExp){
+    if(d.expires_human){
+      const left = Number(d.expires_left_sec||0);
+      const leftMin = Math.floor(left/60);
+      stExp.textContent = `${d.expires_human}${d.expired?'（已过期）':`（剩余约 ${leftMin} 分钟）`}`;
+    }else{
+      stExp.textContent='-';
+    }
   }
-  const a=(d.access_masked || '-');
-  const r=(d.refresh_masked || '-');
-  const ea=document.getElementById('stAccess');
-  const er=document.getElementById('stRefresh');
-  ea.textContent = a; er.textContent = r;
-  ea.title = a; er.title = r;
+}
+
+async function refreshAll(){
+  await loadAccounts();
+  for (const a of ACCS){
+    await refreshStatusOne(a.id);
+  }
+}
+
+async function setDefault(id){
+  if(!confirm('确认将该账号设为默认？')) return;
+  const r = await postJson('/media/admin/strm115AccountSetDefault', {account_id:id}).catch(()=>null);
+  appendLog('setDefault: '+JSON.stringify(r));
+  await refreshAll();
+}
+
+async function delAcc(id){
+  if(!confirm('确认删除该账号？（不可恢复）')) return;
+  const r = await postJson('/media/admin/strm115AccountDelete', {account_id:id}).catch(()=>null);
+  appendLog('delete: '+JSON.stringify(r));
+  await refreshAll();
+}
+
+function openAuthFor(id){
+  openAuthModal();
+  document.getElementById('accSel').value=String(id);
+  const a = ACCS.find(x=>x.id===id);
+  document.getElementById('accName').value = (a && a.name) ? a.name : '';
+  document.getElementById('b2ClientId').value = (a && a.client_id) ? a.client_id : '';
 }
 
 let b2Timer=null; let b2SessionId='';
@@ -189,16 +271,17 @@ async function pollStatus(){
 
 document.getElementById('btnB2Gen').addEventListener('click', async ()=>{
   const clientId=document.getElementById('b2ClientId').value.trim();
+  const accId=Number(document.getElementById('accSel').value||0);
+  const accName=document.getElementById('accName').value.trim() || (accId>0 ? (ACCS.find(x=>x.id===accId)?.name||'115') : '115');
   if(!clientId){ alert('请先填写 AppID / ClientID'); return; }
   document.getElementById('btnB2Complete').disabled=true;
   stopPoll();
   setQrStatus('生成中...');
-  const r=await postJson('/media/admin/strm115B2Qr', {client_id: clientId, name:'115'});
+  const r=await postJson('/media/admin/strm115B2Qr', {client_id: clientId, name: accName, account_id: accId});
   appendLog('b2gen: '+JSON.stringify(r));
   if(r && r.code===200){
     b2SessionId = r.data.session_id;
     document.getElementById('qrSession').textContent=b2SessionId;
-    // Use PNG endpoint for mobile compatibility
     fetch('/media/admin/strm115B2QrPng?session_id='+encodeURIComponent(b2SessionId)+'&_t='+(Date.now()), {credentials:'include'})
       .then(r=>r.blob())
       .then(b=>{ document.getElementById('qrImg').src = URL.createObjectURL(b); })
@@ -217,7 +300,7 @@ document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
   if(r && r.code===200){
     setQrStatus('授权完成');
     stopPoll();
-    await refreshStatus();
+    await refreshAll();
     alert('授权完成');
     closeAuthModal();
   } else {
@@ -225,7 +308,7 @@ document.getElementById('btnB2Complete').addEventListener('click', async ()=>{
   }
 });
 
-refreshStatus();
+refreshAll();
 </script>
 
 {include file="public/_footer" /}
